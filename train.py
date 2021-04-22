@@ -71,19 +71,21 @@ test_loader = DataLoader(dataset=test_set, num_workers=opt.threads, batch_size=o
 device = None#torch.device("cuda:0,1,2,3")
 
 if opt.legacy:
-    from models.pix2pix_0_ln import Pix2PixModel  # last working legacy version, the G and D order is wrong but ok in legacy
-    net = Pix2PixModel(hparams=opt, train_loader=train_loader, test_loader=test_loader)
+    from models.pix2pix import Pix2PixModel
+    net = Pix2PixModel(hparams=opt, train_loader=train_loader,
+                       test_loader=test_loader, checkpoints='/media/ghc/GHc_data1/checkpoints/')
     net = net.cuda()
     net = nn.DataParallel(net)
     net.module.overall_loop()
 else:
-    from models.pix2pix_0_ln import Pix2PixModel
+    from models.pix2pix import Pix2PixModel
     import pytorch_lightning as pl
     from pytorch_lightning import loggers as pl_loggers
-    net = Pix2PixModel(hparams=opt, train_loader=train_loader, test_loader=test_loader)
+    net = Pix2PixModel(hparams=opt, train_loader=train_loader,
+                       test_loader=test_loader, checkpoints='/media/ghc/GHc_data1/checkpoints/')
     print(net.hparams)
     tb_logger = pl_loggers.TensorBoardLogger('logs/')
     trainer = pl.Trainer(gpus=[0],  # distributed_backend='ddp',
-                         max_epochs=600, progress_bar_refresh_rate=20, logger=tb_logger)
+                         max_epochs=opt.n_epochs, progress_bar_refresh_rate=20, logger=tb_logger)
     trainer.fit(net, train_loader, test_loader)
 

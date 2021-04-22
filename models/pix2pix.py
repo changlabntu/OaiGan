@@ -13,7 +13,7 @@ class Pix2PixModel(pl.LightningModule):
     """
     I refactor it to lightning
     """
-    def __init__(self, hparams, train_loader, test_loader):
+    def __init__(self, hparams, train_loader, test_loader, checkpoints):
         super(Pix2PixModel, self).__init__()
         print('using pix2pix_0')
         # initialize
@@ -34,6 +34,8 @@ class Pix2PixModel(pl.LightningModule):
         [self.optimizer_g, self.optimizer_d], [] = self.configure_optimizers()
         self.net_g_scheduler = get_scheduler(self.optimizer_g, opt)
         self.net_d_scheduler = get_scheduler(self.optimizer_d, opt)
+
+        self.check_points = checkpoints
 
         self.criterionGAN = GANLoss('vanilla').cuda()
         self.criterionL1 = nn.L1Loss().cuda()
@@ -114,7 +116,7 @@ class Pix2PixModel(pl.LightningModule):
                   self.loss_d_epoch, self.loss_g_epoch))
 
         # checkpoint
-        dir_checkpoints = '/media/ghc/GHc_data1/checkpoints'
+        dir_checkpoints = self.dir_checkpoints
         if self.epoch % 20 == 0:
             if not os.path.exists(dir_checkpoints):
                 os.mkdir(dir_checkpoints)
@@ -130,7 +132,7 @@ class Pix2PixModel(pl.LightningModule):
         self.tini = time.time()
         self.avg_psnr = 0
 
-    # vanilla pytorch
+    # Vanilla Pytorch
     def training_loop(self, training_data_loader):
         loss_d_epoch = 0
         loss_g_epoch = 0
