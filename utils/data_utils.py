@@ -31,3 +31,16 @@ def imagesc(x, show=True, save=None):
     if save:
         x.save(save)
 
+
+def purge_logs():
+    import glob, os
+    list_version = sorted(glob.glob('logs/default/*/'))
+    list_checkpoint = sorted(glob.glob('logs/default/*/checkpoints/*'))
+
+    checkpoint_epochs = [0] * len(list_version)
+    for c in list_checkpoint:
+        checkpoint_epochs[list_version.index(c.split('checkpoints')[0])] = int(c.split('epoch=')[-1].split('.')[0])
+
+    for i in range(len(list_version)):
+        if checkpoint_epochs[i] < 60:
+            os.system('rm -rf ' + list_version[i])

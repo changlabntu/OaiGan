@@ -25,7 +25,7 @@ def get_D(epochs):
 # Testing settings
 parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
 parser.add_argument('--dataset', default='pain', help='facades')
-parser.add_argument('--prj', type=str, default='test', help='name of the project')
+parser.add_argument('--prj', type=str, default='lightb1', help='name of the project')
 parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
 parser.add_argument('--nepochs', nargs='+', default=[20, 200, 20], help='which checkpoints to be interfered with')
 parser.add_argument('--mode', type=str, default='dummy')
@@ -48,11 +48,11 @@ if __name__ == '__main__':
         os.makedirs(os.path.join("result", opt.prj))
 
     device = torch.device("cuda:0")
-    for epochs in opt.nepochs:
+    for epoch in opt.nepochs:
         a_all = []
         b_all = []
         out_all = []
-        for i in [1612, 323, 1279, 1134, 1884, 494, 1371, 163, 451, 1729, 1062, 1496]:
+        for i in [15, 19, 34, 79, 95, 109, 172, 173, 208, 249, 266]:
             # test
             x = test_set.__getitem__(i)
             img = x[0]
@@ -61,7 +61,7 @@ if __name__ == '__main__':
             b_all.append(mask.unsqueeze(0))
             # model
             input = img.unsqueeze(0).to(device)
-            net_g = get_model(epochs)
+            net_g = get_model(epoch)
             out = net_g(input)
             out_all.append(out.detach().cpu())
 
@@ -74,5 +74,5 @@ if __name__ == '__main__':
         # difference
         cm = plt.get_cmap('viridis')
         dif_all = torch.from_numpy(cm((a_all - out_all))[0, :, :, :3]).type(torch.float32).permute(2, 0, 1)
-        imagesc(torch.cat([a_all, b_all, out_all, dif_all], 1), show=False, save=os.path.join("result", opt.prj, str(epochs) + '.jpg'))
+        imagesc(torch.cat([a_all, b_all, out_all, dif_all], 1), show=False, save=os.path.join("result", opt.prj, str(epoch) + '.jpg'))
 

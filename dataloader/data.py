@@ -1,3 +1,17 @@
+from os import listdir
+from os.path import join
+import glob
+import random
+
+import torch
+import torch.utils.data as data
+import torchvision.transforms as transforms
+
+from dataloader.utils import is_image_file
+from PIL import Image
+import numpy as np
+
+
 def get_training_set(root_dir, direction, mode):
     train_dir = join(root_dir, "train")
 
@@ -10,19 +24,6 @@ def get_test_set(root_dir, direction, mode):
     return DatasetFromFolder(test_dir, direction, mode)
 
 
-from os import listdir
-from os.path import join
-import random
-
-import torch
-import torch.utils.data as data
-import torchvision.transforms as transforms
-
-from dataloader.utils import is_image_file
-from PIL import Image
-import numpy as np
-
-
 def to_8bit(x):
     if type(x) == torch.Tensor:
         x = (x / x.max() * 255).numpy().astype(np.uint8)
@@ -30,11 +31,15 @@ def to_8bit(x):
         x = (x / x.max() * 255).astype(np.uint8)
 
     if len(x.shape) == 2:
-        x = np.concatenate([np.expand_dims(x, 2)] * 3, 2)
+        x = np.concatenate([np.expand_dims(x, 2)]*3, 2)
     return x
 
 
 def imagesc(x, show=True, save=None):
+    # switch
+    if (len(x.shape) == 3) & (x.shape[0] == 3):
+        x = np.transpose(x, (1, 2, 0))
+
     if isinstance(x, list):
         x = [to_8bit(y) for y in x]
         x = np.concatenate(x, 1)
@@ -55,7 +60,8 @@ class DatasetFromFolder(data.Dataset):
         self.mode = mode
         self.a_path = join(image_dir, direction.split('_')[0])
         self.b_path = join(image_dir, direction.split('_')[1])
-        self.image_filenames = [x for x in listdir(self.a_path) if is_image_file(x)]
+
+        self.image_filenames = sorted([x.split('/')[-1] for x in glob.glob(self.a_path+'/*')])
 
         transform_list = [transforms.ToTensor(),
                           transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
@@ -69,7 +75,7 @@ class DatasetFromFolder(data.Dataset):
         b = b.resize((286, 286), Image.BICUBIC)
         a = transforms.ToTensor()(a)
         b = transforms.ToTensor()(b)
-        if 1:  # resizing
+        if 1:  # random crop
             #a = torch.nn.functional.interpolate(a.unsqueeze(0), (286, 286), mode='bicubic', align_corners=True)[0, ::]
             #b = torch.nn.functional.interpolate(b.unsqueeze(0), (286, 286), mode='bicubic', align_corners=True)[0, ::]
             if self.mode == 'train':

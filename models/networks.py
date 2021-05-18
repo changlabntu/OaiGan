@@ -70,7 +70,6 @@ def update_learning_rate(scheduler, optimizer):
     lr = optimizer.param_groups[0]['lr']
     #print('learning rate = %.7f' % lr)
 
-
 def init_weights(net, init_type='normal', init_gain=0.02):
     """Initialize network weights.
 
@@ -164,7 +163,7 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
     elif netG == 'unet_256':
         net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'aggan':
-        from models.aggan import Generator
+        from notinuse.aggan import Generator
         net = Generator()
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
