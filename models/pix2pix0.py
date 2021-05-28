@@ -7,7 +7,7 @@ from models.loss import GANLoss
 from math import log10
 import time, os
 import pytorch_lightning as pl
-
+from models.cyclegan.models import GeneratorResNet, Discriminator
 
 def _weights_init(m):
     if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
@@ -31,23 +31,25 @@ class Pix2PixModel(pl.LightningModule):
 
         # opts
         self.hparams = hparams
-        opt = hparams
         self.train_loader = train_loader
         self.test_loader = test_loader
-        self.net_g = define_G(input_nc=opt.input_nc, output_nc=opt.output_nc, ngf=64, netG=opt.netG,
+        self.net_g = define_G(input_nc=hparams.input_nc, output_nc=hparams.output_nc, ngf=64, netG=hparams.netG,
                               norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[])
-        self.net_d = define_D(input_nc=opt.input_nc + opt.output_nc, ndf=64, netD=opt.netD)
+        #self.net_d = define_D(input_nc=hparams.input_nc + hparams.output_nc, ndf=64, netD=hparams.netD)
+
+        self.net_d = Discriminator(input_shape=(6, 256, 256))
 
         self.net_g = self.net_g.apply(_weights_init)
         self.net_d = self.net_d.apply(_weights_init)
 
         [self.optimizer_d, self.optimizer_g], [] = self.configure_optimizers()
-        self.net_g_scheduler = get_scheduler(self.optimizer_g, opt)
-        self.net_d_scheduler = get_scheduler(self.optimizer_d, opt)
+        self.net_g_scheduler = get_scheduler(self.optimizer_g, hparams)
+        self.net_d_scheduler = get_scheduler(self.optimizer_d, hparams)
 
         self.dir_checkpoints = checkpoints
 
-        self.criterionGAN = nn.BCEWithLogitsLoss()#GANLoss('vanilla').cuda()
+        self.criterionGAN = nn.BCEWithLogitsLoss()#
+        #self.criterionGAN = GANLoss(hparams.gan_mode).cuda()
         self.criterionL1 = nn.L1Loss().cuda()
 
     def configure_optimizers(self):
@@ -59,7 +61,7 @@ class Pix2PixModel(pl.LightningModule):
     def backward_g(self, real_images, conditioned_images):
         self.net_g.zero_grad()
         fake_images = self.net_g(conditioned_images)
-
+        #print(torch.cat((fake_images, conditioned_images), 1).shape)
         disc_logits = self.net_d(torch.cat((fake_images, conditioned_images), 1))
         adversarial_loss = self.criterionGAN(disc_logits, torch.ones_like(disc_logits))
 
@@ -106,7 +108,7 @@ class Pix2PixModel(pl.LightningModule):
             return loss_g
 
     def training_epoch_end(self, outputs):
-        opt = self.hparams
+        hparams = self.hparams
         self.net_g_scheduler.step()
         self.net_d_scheduler.step()
         # checkpoint
@@ -114,13 +116,13 @@ class Pix2PixModel(pl.LightningModule):
         if self.epoch % 20 == 0:
             if not os.path.exists(dir_checkpoints):
                 os.mkdir(dir_checkpoints)
-            if not os.path.exists(os.path.join(dir_checkpoints, opt.prj)):
-                os.mkdir(os.path.join(dir_checkpoints, opt.prj))
-            net_g_model_out_path = dir_checkpoints + "/{}/netG_model_epoch_{}.pth".format(opt.prj, self.epoch)
-            net_d_model_out_path = dir_checkpoints + "/{}/netD_model_epoch_{}.pth".format(opt.prj, self.epoch)
+            if not os.path.exists(os.path.join(dir_checkpoints, hparams.prj)):
+                os.mkdir(os.path.join(dir_checkpoints, hparams.prj))
+            net_g_model_out_path = dir_checkpoints + "/{}/netG_model_epoch_{}.pth".format(hparams.prj, self.epoch)
+            net_d_model_out_path = dir_checkpoints + "/{}/netD_model_epoch_{}.pth".format(hparams.prj, self.epoch)
             torch.save(self.net_g, net_g_model_out_path)
             torch.save(self.net_d, net_d_model_out_path)
-            print("Checkpoint saved to {}".format(dir_checkpoints + '/' + opt.prj))
+            print("Checkpoint saved to {}".format(dir_checkpoints + '/' + hparams.prj))
 
         self.epoch += 1
         self.tini = time.time()

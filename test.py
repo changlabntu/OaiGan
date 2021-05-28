@@ -6,17 +6,21 @@ import torch
 from torchvision.utils import make_grid
 import numpy as np
 import matplotlib.pyplot as plt
+from utils.make_config import load_config
+from utils.bone_segmentation.bonesegmentation import BoneSegModel
+
+path = load_config('config.ini', 'Path')
 
 
 def get_model(epochs):
-    dir_checkpoints = '/media/ghc/GHc_data1/checkpoints'
+    dir_checkpoints = path['checkpoints']
     model_path = dir_checkpoints + "/{}/netG_model_epoch_{}.pth".format(opt.prj, epochs)
     net_g = torch.load(model_path).to(device)
     return net_g
 
 
 def get_D(epochs):
-    dir_checkpoints = '/media/ghc/GHc_data1/checkpoints'
+    dir_checkpoints = path['checkpoints']
     model_path = dir_checkpoints + "/{}/netD_model_epoch_{}.pth".format(opt.prj, epochs)
     net_d = torch.load(model_path).to(device)
     return net_d
@@ -24,10 +28,10 @@ def get_D(epochs):
 
 # Testing settings
 parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
-parser.add_argument('--dataset', default='pain', help='facades')
-parser.add_argument('--prj', type=str, default='lightb1', help='name of the project')
+parser.add_argument('--dataset', default='pain')
+parser.add_argument('--prj', type=str, default='t2d0521_unet128', help='name of the project')
 parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
-parser.add_argument('--nepochs', nargs='+', default=[20, 200, 20], help='which checkpoints to be interfered with')
+parser.add_argument('--nepochs', nargs='+', default=[20, 600, 20], help='which checkpoints to be interfered with')
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
 opt = parser.parse_args()
@@ -41,11 +45,13 @@ if __name__ == '__main__':
         test_set = DatasetDessSegmentation(mode='val', direction='a2b')
     else:
         from dataloader.data import get_test_set
-        root_path = "dataset/"
+        root_path = path['dataset']#"dataset/"
         test_set = get_test_set(root_path + opt.dataset, opt.direction, mode='test')
 
     if not os.path.exists(os.path.join("result", opt.prj)):
         os.makedirs(os.path.join("result", opt.prj))
+
+    seg_model = BoneSegModel()
 
     device = torch.device("cuda:0")
     for epoch in opt.nepochs:
@@ -57,6 +63,7 @@ if __name__ == '__main__':
             x = test_set.__getitem__(i)
             img = x[0]
             mask = x[1]
+
             a_all.append(img.unsqueeze(0))
             b_all.append(mask.unsqueeze(0))
             # model
@@ -64,6 +71,10 @@ if __name__ == '__main__':
             net_g = get_model(epoch)
             out = net_g(input)
             out_all.append(out.detach().cpu())
+
+            aseg = seg_model.net(img.unsqueeze(0).cuda())[0].detach().cpu().numpy()
+            bseg = seg_model.net(mask.unsqueeze(0).cuda())[0].detach().cpu().numpy()
+            oseg = seg_model.net(out.cuda())[0].detach().cpu().numpy()
 
         a_all = make_grid(torch.cat(a_all, 0), nrow=12, padding=0)
         b_all = make_grid(torch.cat(b_all, 0), nrow=12, padding=0)

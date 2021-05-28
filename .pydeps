@@ -1,0 +1,16 @@
+[pydeps]
+max_bacon = 0
+verbose = 0
+pylib = False
+exclude =
+    os
+    re
+    sys
+    torch
+    pytorch_lightning
+    PIL
+    torchvision
+    numpy
+
+    collections
+    __future__

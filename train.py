@@ -1,16 +1,9 @@
 from __future__ import print_function
 import argparse
-import os, time
-from math import log10
-
-import pytorch_lightning as pl
-from pytorch_lightning import loggers as pl_loggers
-import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-import torch.backends.cudnn as cudnn
-
-from models.networks import update_learning_rate
+from utils.make_config import load_config
+path = load_config('config.ini', 'Path')
 
 
 # Training settings
@@ -57,7 +50,7 @@ if opt.dataset == 'dess':
     test_set = DatasetDessSegmentation(mode='val', direction=opt.direction)
 else:
     from dataloader.data import get_training_set, get_test_set
-    root_path = "dataset/"
+    root_path = path['dataset']
     train_set = get_training_set(root_path + opt.dataset, opt.direction, mode='train')
     test_set = get_test_set(root_path + opt.dataset, opt.direction, mode='train')
 
@@ -73,7 +66,7 @@ if opt.legacy:
     #device = torch.device("cuda:0,1,2,3")
     from models.pix2pix0 import Pix2PixModel
     net = Pix2PixModel(hparams=opt, train_loader=train_loader,
-                       test_loader=test_loader, checkpoints='/media/ghc/GHc_data1/checkpoints/')
+                       test_loader=test_loader, checkpoints=path['checkpoints'])
     net = net.cuda()
     net = nn.DataParallel(net)
 
@@ -83,9 +76,10 @@ else:
     import pytorch_lightning as pl
     from pytorch_lightning import loggers as pl_loggers
     net = Pix2PixModel(hparams=opt, train_loader=None,
-                       test_loader=None, checkpoints='/media/ghc/GHc_data1/checkpoints/')
+                       test_loader=None, checkpoints=path['checkpoints'])
     print(net.hparams)
-    tb_logger = pl_loggers.TensorBoardLogger('logs4/')
+    tb_logger = pl_loggers.TensorBoardLogger(path['logs'])
     trainer = pl.Trainer(gpus=[0],  # distributed_backend='ddp',
                          max_epochs=opt.n_epochs, progress_bar_refresh_rate=20, logger=tb_logger)
     trainer.fit(net, train_loader, test_loader)
+
