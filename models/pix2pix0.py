@@ -7,7 +7,7 @@ from models.loss import GANLoss
 from math import log10
 import time, os
 import pytorch_lightning as pl
-from models.cyclegan.models import GeneratorResNet, Discriminator
+from models.cyclegan.models import GeneratorResNet, Discriminator32
 
 def _weights_init(m):
     if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
@@ -37,7 +37,7 @@ class Pix2PixModel(pl.LightningModule):
                               norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[])
         #self.net_d = define_D(input_nc=hparams.input_nc + hparams.output_nc, ndf=64, netD=hparams.netD)
 
-        self.net_d = Discriminator(input_shape=(6, 256, 256))
+        self.net_d = Discriminator32(input_shape=(6, 256, 256))  ##  use the discriminator from PatchGAN
 
         self.net_g = self.net_g.apply(_weights_init)
         self.net_d = self.net_d.apply(_weights_init)
@@ -96,6 +96,7 @@ class Pix2PixModel(pl.LightningModule):
             loss_d = self.backward_d(real, condition)
             self.log('loss_d', loss_d, on_step=False, on_epoch=True,
                      prog_bar=True, logger=True, sync_dist=True)
+            #self.logger.experiment.log_metric('loss_d', loss_d)
             return loss_d
 
         if optimizer_idx == 1:
@@ -105,6 +106,7 @@ class Pix2PixModel(pl.LightningModule):
             loss_g = self.backward_g(real, condition)
             self.log('loss_g', loss_g, on_step=False, on_epoch=True,
                      prog_bar=True, logger=True, sync_dist=True)
+            #self.logger.experiment.log_metric('loss_g', loss_g)
             return loss_g
 
     def training_epoch_end(self, outputs):

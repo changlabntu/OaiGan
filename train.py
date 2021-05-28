@@ -3,7 +3,9 @@ import argparse
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from utils.make_config import load_config
-path = load_config('config.ini', 'Path')
+import os
+from dotenv import load_dotenv
+load_dotenv('.env')
 
 
 # Training settings
@@ -50,7 +52,7 @@ if opt.dataset == 'dess':
     test_set = DatasetDessSegmentation(mode='val', direction=opt.direction)
 else:
     from dataloader.data import get_training_set, get_test_set
-    root_path = path['dataset']
+    root_path = os.environ.get('DATASET')
     train_set = get_training_set(root_path + opt.dataset, opt.direction, mode='train')
     test_set = get_test_set(root_path + opt.dataset, opt.direction, mode='train')
 
@@ -66,7 +68,7 @@ if opt.legacy:
     #device = torch.device("cuda:0,1,2,3")
     from models.pix2pix0 import Pix2PixModel
     net = Pix2PixModel(hparams=opt, train_loader=train_loader,
-                       test_loader=test_loader, checkpoints=path['checkpoints'])
+                       test_loader=test_loader, checkpoints=os.environ.get('CHECKPOINTS'))
     net = net.cuda()
     net = nn.DataParallel(net)
 
@@ -74,12 +76,17 @@ if opt.legacy:
 else:
     from models.pix2pix0 import Pix2PixModel
     import pytorch_lightning as pl
-    from pytorch_lightning import loggers as pl_loggers
+    #from pytorch_lightning import loggers as pl_loggers
+    #logger = pl_loggers.TensorBoardLogger(os.environ.get('LOGS'))
+    from pytorch_lightning.loggers.neptune import NeptuneLogger
+    logger = NeptuneLogger(
+        api_key=os.environ.get('NEPTUNE_API_TOKEN'),
+        project_name="ntuchanglab/lightning-pix2pix",)
     net = Pix2PixModel(hparams=opt, train_loader=None,
-                       test_loader=None, checkpoints=path['checkpoints'])
+                       test_loader=None, checkpoints=os.environ.get('CHECKPOINTS'))
     print(net.hparams)
-    tb_logger = pl_loggers.TensorBoardLogger(path['logs'])
+
     trainer = pl.Trainer(gpus=[0],  # distributed_backend='ddp',
-                         max_epochs=opt.n_epochs, progress_bar_refresh_rate=20, logger=tb_logger)
+                         max_epochs=opt.n_epochs, progress_bar_refresh_rate=20, logger=logger)
     trainer.fit(net, train_loader, test_loader)
 
