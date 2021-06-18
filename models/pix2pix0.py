@@ -7,7 +7,8 @@ from models.loss import GANLoss
 from math import log10
 import time, os
 import pytorch_lightning as pl
-from models.cyclegan.models import GeneratorResNet, Discriminator32
+from models.cyclegan.models import GeneratorResNet, Discriminator
+
 
 def _weights_init(m):
     if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
@@ -37,7 +38,12 @@ class Pix2PixModel(pl.LightningModule):
                               norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[])
         #self.net_d = define_D(input_nc=hparams.input_nc + hparams.output_nc, ndf=64, netD=hparams.netD)
 
-        self.net_d = Discriminator32(input_shape=(6, 256, 256))  ##  use the discriminator from PatchGAN
+        #self.net_d = Discriminator(input_shape=(6, 256, 256))  ##  use the discriminator from CycleGAN PatchGAN
+        if hparams.netD == 'patchgan':
+            self.net_d = Discriminator(input_shape=(6, 256, 256))
+        else:
+            self.net_d = define_D(input_nc=hparams.output_nc * 2, ndf=64, netD=hparams.netD)
+
 
         self.net_g = self.net_g.apply(_weights_init)
         self.net_d = self.net_d.apply(_weights_init)
@@ -48,9 +54,11 @@ class Pix2PixModel(pl.LightningModule):
 
         self.dir_checkpoints = checkpoints
 
-        self.criterionGAN = nn.BCEWithLogitsLoss()#
-        #self.criterionGAN = GANLoss(hparams.gan_mode).cuda()
         self.criterionL1 = nn.L1Loss().cuda()
+        if hparams.gan_mode == 'vanilla':
+            self.criterionGAN = nn.BCEWithLogitsLoss()
+        else:
+            self.criterionGAN = GANLoss(hparams.gan_mode).cuda()
 
     def configure_optimizers(self):
         self.optimizer_g = optim.Adam(self.net_g.parameters(), lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
@@ -88,7 +96,6 @@ class Pix2PixModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         condition, real = batch
-
         if optimizer_idx == 0:
             #self.net_d.zero_grad()
             #for param in self.net_d.parameters():
@@ -96,7 +103,6 @@ class Pix2PixModel(pl.LightningModule):
             loss_d = self.backward_d(real, condition)
             self.log('loss_d', loss_d, on_step=False, on_epoch=True,
                      prog_bar=True, logger=True, sync_dist=True)
-            #self.logger.experiment.log_metric('loss_d', loss_d)
             return loss_d
 
         if optimizer_idx == 1:
@@ -106,7 +112,6 @@ class Pix2PixModel(pl.LightningModule):
             loss_g = self.backward_g(real, condition)
             self.log('loss_g', loss_g, on_step=False, on_epoch=True,
                      prog_bar=True, logger=True, sync_dist=True)
-            #self.logger.experiment.log_metric('loss_g', loss_g)
             return loss_g
 
     def training_epoch_end(self, outputs):

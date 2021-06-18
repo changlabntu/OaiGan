@@ -1,12 +1,23 @@
 import torch
 from .unetclean import UNetClean
+from collections import OrderedDict
+from dotenv import load_dotenv
+import os
+load_dotenv('.env')
 
 
 class BoneSegModel():
     def __init__(self):
-        net = UNetClean(4)
-        net.load_state_dict(torch.load('utils/bone_segmentation/clean_femur_tibia_cartilage.pth'))
-        self.net = net.cuda()
+        #net = UNetClean(4)
+        #net.load_state_dict(torch.load('utils/bone_segmentation/clean_femur_tibia_cartilage.pth'))v
+        unet = UNetClean(output_ch=3)
+        ckpt = torch.load(os.environ.get('model_seg'))
+        state_dict = ckpt['state_dict']
+        new_dict = OrderedDict()
+        for k in list(state_dict.keys()):
+            new_dict[k.split('net.')[-1]] = state_dict[k]
+        unet.load_state_dict(new_dict)
+        self.net = unet.cuda()
 
 
 if __name__ == '__main__':

@@ -40,7 +40,7 @@ class CycleGanModel(LightningModule):
         self.lr = hparams.lr
         self.b1 = hparams.beta1
         self.b2 = 0.999
-        input_shape = (3, 256, 256)
+        input_shape = (3, 384, 384)
         self.input_shape = input_shape
         self.lambda_cyc = hparams.lambda_cyc
         #self.lambda_id = lambda_id
@@ -58,11 +58,15 @@ class CycleGanModel(LightningModule):
         self.G_BA = define_G(input_nc=hparams.input_nc, output_nc=hparams.output_nc, ngf=64, netG=hparams.netG,
                              norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[])
 
-        #self.D_A = define_D(input_nc=hparams.output_nc, ndf=64, netD=hparams.netD)
-        #self.D_B = define_D(input_nc=hparams.output_nc, ndf=64, netD=hparams.netD)
-
-        self.D_A = Discriminator(input_shape)
-        self.D_B = Discriminator(input_shape)
+        if hparams.netD == 'cycle':
+            self.D_A = Discriminator(input_shape)
+            self.D_B = Discriminator(input_shape)
+            self.dPatch = 16
+        else:
+            self.D_A = define_D(input_nc=hparams.output_nc, ndf=64, netD=hparams.netD)
+            self.D_B = define_D(input_nc=hparams.output_nc, ndf=64, netD=hparams.netD)
+            if hparams.netD == 'pixel':
+                self.dPatch = 1
 
         self.fake_A_buffer = ReplayBuffer()
         self.fake_B_buffer = ReplayBuffer()
@@ -91,8 +95,8 @@ class CycleGanModel(LightningModule):
         #fake = Variable(
         #    Tensor(np.zeros((real_A.size(0), *self.D_A.output_shape))), requires_grad=False)
 
-        valid = torch.ones(real_A.shape[0], 1, 16, 16).cuda()
-        fake = torch.zeros(real_A.shape[0], 1, 16, 16).cuda()
+        valid = torch.ones(real_A.shape[0], 1, self.dPatch, self.dPatch).cuda()
+        fake = torch.zeros(real_A.shape[0], 1, self.dPatch, self.dPatch).cuda()
 
         fake_B = self.G_AB(real_A)
         fake_A = self.G_BA(real_B)
@@ -101,20 +105,6 @@ class CycleGanModel(LightningModule):
         #  Train Generators
         # ------------------
         if optimizer_idx == 0:
-
-            # Arange images along x-axis
-            real_A_ = torchvision.utils.make_grid(
-                real_A, nrow=5, normalize=True)
-            real_B_ = torchvision.utils.make_grid(
-                real_B, nrow=5, normalize=True)
-            fake_A_ = torchvision.utils.make_grid(
-                fake_A, nrow=5, normalize=True)
-            fake_B_ = torchvision.utils.make_grid(
-                fake_B, nrow=5, normalize=True)
-            # Arange images along y-axis
-            image_grid = torch.cat((real_A_, fake_B_, real_B_, fake_A_), 1)
-            grid = torchvision.utils.make_grid(image_grid)
-            #self.logger.experiment.add_image('generated_images', grid, 0)
 
             self.G_AB.train()
             self.G_BA.train()
@@ -126,11 +116,7 @@ class CycleGanModel(LightningModule):
             loss_identity = (loss_id_A * 1 + loss_id_B * 1) / 2
 
             # GAN loss
-            print(fake_B.shape)
-            print(valid.shape)
-            print(self.D_B(fake_B).shape)
             loss_GAN_AB = self.criterion_GAN(self.D_B(fake_B), valid)
-            print(fake_A.shape)
             loss_GAN_BA = self.criterion_GAN(self.D_A(fake_A), valid)
             loss_GAN = (loss_GAN_AB * 1 + loss_GAN_BA * 1) / 2
 

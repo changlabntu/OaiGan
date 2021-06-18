@@ -61,20 +61,23 @@ class DatasetFromFolder(data.Dataset):
         self.a_path = join(image_dir, direction.split('_')[0])
         self.b_path = join(image_dir, direction.split('_')[1])
 
-        self.image_filenames = sorted([x.split('/')[-1] for x in glob.glob(self.a_path+'/*')])
+        self.image = sorted([x.split('/')[-1] for x in glob.glob(self.a_path+'/*')])
 
-        transform_list = [transforms.ToTensor(),
-                          transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-
-        self.transform = transforms.Compose(transform_list)
+        #transform_list = [transforms.ToTensor(),
+        #                  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+        #self.transform = transforms.Compose(transform_list)
 
     def __getitem__(self, index):
-        a = Image.open(join(self.a_path, self.image_filenames[index])).convert('RGB')
-        b = Image.open(join(self.b_path, self.image_filenames[index])).convert('RGB')
-        a = a.resize((286, 286), Image.BICUBIC)
+        a = Image.open(join(self.a_path, self.image[index]))#.convert('RGB')
+        b = Image.open(join(self.b_path, self.image[index]))#.convert('RGB')
+        a = a.resize((286, 286), Image.BICUBIC)  # 444 > 286
         b = b.resize((286, 286), Image.BICUBIC)
         a = transforms.ToTensor()(a)
         b = transforms.ToTensor()(b)
+        a = a.type(torch.float32)
+        b = b.type(torch.float32)
+        a = a / a.max()
+        b = b / b.max()
         if 1:  # random crop
             #a = torch.nn.functional.interpolate(a.unsqueeze(0), (286, 286), mode='bicubic', align_corners=True)[0, ::]
             #b = torch.nn.functional.interpolate(b.unsqueeze(0), (286, 286), mode='bicubic', align_corners=True)[0, ::]
@@ -86,6 +89,10 @@ class DatasetFromFolder(data.Dataset):
                 h_offset = 15
             a = a[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
             b = b[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
+
+        if a.shape[0] != 3:
+            a = torch.cat([a] * 3, 0)
+            b = torch.cat([b] * 3, 0)
         a = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(a)
         b = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(b)
 
@@ -99,4 +106,4 @@ class DatasetFromFolder(data.Dataset):
         return a, b
 
     def __len__(self):
-        return len(self.image_filenames)
+        return len(self.image)

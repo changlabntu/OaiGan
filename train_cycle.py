@@ -2,8 +2,9 @@ from __future__ import print_function
 import argparse
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from utils.make_config import load_config
-path = load_config('config.ini', 'Path')
+import os
+from dotenv import load_dotenv
+load_dotenv('.env')
 
 
 # Training settings
@@ -13,9 +14,9 @@ parser.add_argument('--prj', type=str, default='', help='name of the project')
 parser.add_argument('-b', dest='batch_size', type=int, default=1, help='training batch size')
 parser.add_argument('--test_batch_size', type=int, default=1, help='testing batch size')
 parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
-parser.add_argument('--gan_mode', type=str, default='lsgan', help='gan mode')
+#parser.add_argument('--gan_mode', type=str, default='lsgan', help='gan mode')
 parser.add_argument('--netG', type=str, default='unet_256', help='netG model')
-parser.add_argument('--netD', type=str, default='basic', help='netD model')
+parser.add_argument('--netD', type=str, default='cycle', help='netD model')
 parser.add_argument('--input_nc', type=int, default=3, help='input image channels')
 parser.add_argument('--output_nc', type=int, default=3, help='output image channels')
 parser.add_argument('--ngf', type=int, default=64, help='generator filters in first conv layer')
@@ -40,7 +41,6 @@ opt.prj = opt.dataset + '_' + opt.prj
 print(opt)
 
 #cudnn.benchmark = True
-
 #torch.manual_seed(opt.seed)
 #torch.cuda.manual_seed(opt.seed)
 
@@ -51,7 +51,7 @@ if opt.dataset == 'dess':
     test_set = DatasetDessSegmentation(mode='val', direction=opt.direction)
 else:
     from dataloader.data import get_training_set, get_test_set
-    root_path = path['dataset']
+    root_path = os.environ.get('DATASET')
     train_set = get_training_set(root_path + opt.dataset, opt.direction, mode='train')
     test_set = get_test_set(root_path + opt.dataset, opt.direction, mode='train')
 
@@ -62,14 +62,22 @@ train_loader = DataLoader(dataset=train_set, num_workers=opt.threads, batch_size
 test_loader = DataLoader(dataset=test_set, num_workers=opt.threads, batch_size=opt.test_batch_size, shuffle=False)
 
 #  Model
+if not opt.legacy:
+    from models.cyclegan.cycleganln import CycleGanModel
+    import pytorch_lightning as pl
+    from pytorch_lightning import loggers as pl_loggers
+    logger = pl_loggers.TensorBoardLogger(os.environ.get('LOGS'))
+    #from pytorch_lightning.loggers.neptune import NeptuneLogger
+    #logger = NeptuneLogger(
+    #    api_key=os.environ.get('NEPTUNE_API_TOKEN'),
+    #    project_name="ntuchanglab/lightning-pix2pix",)
+    net = CycleGanModel(hparams=opt, dir_checkpoints=os.environ.get('CHECKPOINTS'))
+    print(net.hparams)
+    trainer = pl.Trainer(gpus=[0],  # distributed_backend='ddp',
+                         max_epochs=opt.n_epochs, progress_bar_refresh_rate=20, logger=logger)
+    trainer.fit(net, train_loader, test_loader)
+else:
+    print('Legacy mode not implemented!')
 
-from models.cyclegan.cycleganln import CycleGanModel
-import pytorch_lightning as pl
-from pytorch_lightning import loggers as pl_loggers
-net = CycleGanModel(hparams=opt, dir_checkpoints=path['checkpoints'])
-print(net.hparams)
-tb_logger = pl_loggers.TensorBoardLogger(path['logs'])
-trainer = pl.Trainer(gpus=[0],# distributed_backend='ddp',
-                     max_epochs=opt.n_epochs, progress_bar_refresh_rate=20, logger=tb_logger)
-trainer.fit(net, train_loader, test_loader)
-
+# USAGE
+# CUDA_VISIBLE_DEVICES=1 python train_cycle.py --dataset painpickedgood -b 1 --prj original_size --direction a_b

@@ -60,6 +60,12 @@ class GANLoss(nn.Module):
         Returns:
             the calculated loss.
         """
+        if self.gan_mode == 'wgangp':
+            if target_is_real.mean() == 1:
+                target_is_real = 1
+            else:
+                target_is_real = 0
+
         if self.gan_mode in ['lsgan', 'vanilla']:
             target_tensor = self.get_target_tensor(prediction, target_is_real)
             loss = self.loss(prediction, target_tensor)
