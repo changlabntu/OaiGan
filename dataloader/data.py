@@ -68,7 +68,7 @@ class DatasetFromFolder(data.Dataset):
         #self.transform = transforms.Compose(transform_list)
 
     def __getitem__(self, index):
-        a = Image.open(join(self.a_path, self.image[index]))#.convert('RGB')
+        a = Image.open(join(self.a_path, self.image[index]))#.convert('RGB') (DESS: 294>286) (PAIN: 224>286)
         b = Image.open(join(self.b_path, self.image[index]))#.convert('RGB')
         a = a.resize((286, 286), Image.BICUBIC)  # 444 > 286
         b = b.resize((286, 286), Image.BICUBIC)
@@ -107,3 +107,7 @@ class DatasetFromFolder(data.Dataset):
 
     def __len__(self):
         return len(self.image)
+
+
+if __name__ == '__main__':
+    ds = get_training_set('/media/ghc/GHc_data1/paired_images/TSE_DESS/', direction='a_b', mode='train')

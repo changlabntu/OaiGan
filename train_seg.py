@@ -14,9 +14,9 @@ parser.add_argument('--prj', type=str, default='', help='name of the project')
 parser.add_argument('-b', dest='batch_size', type=int, default=1, help='training batch size')
 parser.add_argument('--test_batch_size', type=int, default=1, help='testing batch size')
 parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
-#parser.add_argument('--gan_mode', type=str, default='lsgan', help='gan mode')
+parser.add_argument('--gan_mode', type=str, default='vanilla', help='gan mode')
 parser.add_argument('--netG', type=str, default='unet_256', help='netG model')
-parser.add_argument('--netD', type=str, default='cycle', help='netD model')
+parser.add_argument('--netD', type=str, default='patchgan', help='netD model')
 parser.add_argument('--input_nc', type=int, default=3, help='input image channels')
 parser.add_argument('--output_nc', type=int, default=3, help='output image channels')
 parser.add_argument('--ngf', type=int, default=64, help='generator filters in first conv layer')
@@ -31,8 +31,8 @@ parser.add_argument('--lr_decay_iters', type=int, default=50, help='multiply by 
 parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. default=0.5')
 parser.add_argument('--threads', type=int, default=4, help='number of threads for data loader to use')
 parser.add_argument('--seed', type=int, default=123, help='random seed to use. Default=123')
-parser.add_argument('--lambda_cyc', type=float, default=10, help='weight on L1 term in cyclic loss')
-parser.add_argument('--lambda_id', type=float, default=5, help='weight on L1 term in objective')
+parser.add_argument('--lamb', type=int, default=100, help='weight on L1 term in objective')
+parser.add_argument('--lseg', type=int, default=0, help='weight on segmentation loss in objective')
 parser.add_argument('--legacy', action='store_true', dest='legacy', default=False, help='legacy pytorch')
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
@@ -45,15 +45,10 @@ print(opt)
 #torch.cuda.manual_seed(opt.seed)
 
 #  Dataset
-if opt.dataset == 'dess':
-    from dataloader.data_dess_segmentation import DatasetDessSegmentation
-    train_set = DatasetDessSegmentation(mode='train', direction=opt.direction)
-    test_set = DatasetDessSegmentation(mode='val', direction=opt.direction)
-else:
-    from dataloader.data import get_training_set, get_test_set
-    root_path = os.environ.get('DATASET')
-    train_set = get_training_set(root_path + opt.dataset, opt.direction, mode='train')
-    test_set = get_test_set(root_path + opt.dataset, opt.direction, mode='train')
+from dataloader.data_multi import get_training_set, get_test_set
+root_path = os.environ.get('DATASET')
+train_set = get_training_set(root_path + opt.dataset, opt.direction, mode='train')
+test_set = get_test_set(root_path + opt.dataset, opt.direction, mode='train')
 
 print('training set length: ' + str(len(train_set)))
 print('testing set length: ' + str(len(test_set)))
@@ -63,7 +58,7 @@ test_loader = DataLoader(dataset=test_set, num_workers=opt.threads, batch_size=o
 
 #  Model
 if not opt.legacy:
-    from models.cyclegan.cycleganln import CycleGanModel
+    from models.pix2pixseg import Pix2PixModel
     import pytorch_lightning as pl
     from pytorch_lightning import loggers as pl_loggers
     logger = pl_loggers.TensorBoardLogger(os.environ.get('LOGS'))
@@ -71,14 +66,20 @@ if not opt.legacy:
     #logger = NeptuneLogger(
     #    api_key=os.environ.get('NEPTUNE_API_TOKEN'),
     #    project_name="ntuchanglab/lightning-pix2pix",)
-    net = CycleGanModel(hparams=opt, dir_checkpoints=os.environ.get('CHECKPOINTS'))
+    net = Pix2PixModel(hparams=opt, train_loader=None,
+                       test_loader=None, checkpoints=os.environ.get('CHECKPOINTS'))
     print(net.hparams)
     trainer = pl.Trainer(gpus=[0],  # distributed_backend='ddp',
                          max_epochs=opt.n_epochs, progress_bar_refresh_rate=20, logger=logger)
     trainer.fit(net, train_loader, test_loader)
 else:
-    print('Legacy mode not implemented!')
+    from models.pix2pix0 import Pix2PixModel
+    net = Pix2PixModel(hparams=opt, train_loader=train_loader,
+                       test_loader=test_loader, checkpoints=os.environ.get('CHECKPOINTS'))
+    net = net.cuda()
+    net = nn.DataParallel(net)
+    net.module.overall_loop()
 
 # USAGE
-# CUDA_VISIBLE_DEVICES=1 python train_cycle.py --dataset painpickedgood -b 1 --prj original_size --direction a_b
-# CUDA_VISIBLE_DEVICES=1 python train_cycle.py --dataset pain -b 1 --prj cycle_eff --direction aregis1eff1_b
+# CUDA_VISIBLE_DEVICES=1 python train_seg.py --dataset TSE_DESS -b 16 --prj TrySeg --direction a_b_bseg
+# CUDA_VISIBLE_DEVICES=0 python train_seg.py --dataset pain -b 16 --prj wSeg100 --direction aregis1_b

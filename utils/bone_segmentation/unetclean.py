@@ -109,6 +109,8 @@ class UNetClean(nn.Module):
         self.Conv = nn.Conv2d(deco_fil[0], output_ch, kernel_size=1, stride=1, padding=0)
 
     def forward(self, x):
+        x = x - x.min()
+        x = x / x.max()
         # x (b, t, c, w, h)
         # Encoder Path
         B = x.shape[0]
