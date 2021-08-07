@@ -177,6 +177,6 @@ if __name__ == '__main__':
 
 
 # USAGE
-# CUDA_VISIBLE_DEVICES=1 python test.py --dataset pain --nepochs 0 601 20 --prj patch16 --direction a_b
+# CUDA_VISIBLE_DEVICES=1 python test.py --dataset pain --nepochs 0 601 20 --prj wseg1000 --direction a_b
 # CUDA_VISIBLE_DEVICES=3 python test.py --dataset TSE_DESS --nepochs 0 601 20 --prj up256patchgan --direction a_b
 # CUDA_VISIBLE_DEVICES=2 python test.py --dataset TSE_DESS --nepochs 0 601 20 --prj TrySeg100cartilage --direction a_b

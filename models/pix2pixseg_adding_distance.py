@@ -95,6 +95,8 @@ class Pix2PixModel(pl.LightningModule):
     def __init__(self, hparams, train_loader, test_loader, checkpoints):
         super(Pix2PixModel, self).__init__()
         print('using pix2pix.py')
+        # additional models
+
         # initialize
         self.tini = time.time()
         self.epoch = 0
@@ -129,6 +131,71 @@ class Pix2PixModel(pl.LightningModule):
             self.criterionGAN = GANLoss(hparams.gan_mode).cuda()
 
         self.segLoss = SegmentationCrossEntropyLoss()
+
+        self.normalize_distances = False
+
+    def distance(self, A, B):
+        return torch.mean(torch.abs(A - B))
+
+    def get_individual_distance_loss(self, A_i, A_j, AB_i, AB_j,
+                                     B_i, B_j, BA_i, BA_j):
+
+        distance_in_A = self.distance(A_i, A_j)
+        distance_in_AB = self.distance(AB_i, AB_j)
+        distance_in_B = self.distance(B_i, B_j)
+        distance_in_BA = self.distance(BA_i, BA_j)
+
+        if self.normalize_distances:
+            distance_in_A = (distance_in_A - self.expectation_A) / self.std_A
+            distance_in_AB = (distance_in_AB - self.expectation_B) / self.std_B
+            distance_in_B = (distance_in_B - self.expectation_B) / self.std_B
+            distance_in_BA = (distance_in_BA - self.expectation_A) / self.std_A
+
+        return torch.abs(distance_in_A - distance_in_AB), torch.abs(distance_in_B - distance_in_BA)
+
+    def get_self_distances(self, A, B, AB, BA):
+
+        A_half_1, A_half_2 = torch.chunk(A, 2, dim=2)
+        B_half_1, B_half_2 = torch.chunk(B, 2, dim=2)
+        AB_half_1, AB_half_2 = torch.chunk(AB, 2, dim=2)
+        BA_half_1, BA_half_2 = torch.chunk(BA, 2, dim=2)
+
+        l_distance_A, l_distance_B = \
+            self.get_individual_distance_loss(A_half_1, A_half_2,
+                                              AB_half_1, AB_half_2,
+                                              B_half_1, B_half_2,
+                                              BA_half_1, BA_half_2)
+
+        return l_distance_A, l_distance_B
+
+    def get_distance_losses(self, A, B, AB, BA):
+
+        As = torch.split(A, 1)
+        Bs = torch.split(B, 1)
+        ABs = torch.split(AB, 1)
+        BAs = torch.split(BA, 1)
+
+        loss_distance_A = 0.0
+        loss_distance_B = 0.0
+        num_pairs = 0
+        min_length = min(len(As), len(Bs))
+
+        for i in range(min_length - 1):
+            for j in range(i + 1, min_length):
+                num_pairs += 1
+                loss_distance_A_ij, loss_distance_B_ij = \
+                    self.get_individual_distance_loss(As[i], As[j],
+                                                      ABs[i], ABs[j],
+                                                      Bs[i], Bs[j],
+                                                      BAs[i], BAs[j])
+
+                loss_distance_A += loss_distance_A_ij
+                loss_distance_B += loss_distance_B_ij
+
+        loss_distance_A = loss_distance_A / num_pairs
+        loss_distance_B = loss_distance_B / num_pairs
+
+        return loss_distance_A, loss_distance_B
 
     def configure_optimizers(self):
         self.optimizer_g = optim.Adam(self.net_g.parameters(), lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
@@ -167,9 +234,23 @@ class Pix2PixModel(pl.LightningModule):
         loss_g = loss_g + loss_seg * self.hparams.lseg
 
         # target domain identity loss
-        fake_images_b = self.net_g(real_images)
-        recon_loss_b = nn.MSELoss()(fake_images_b, real_images)
-        loss_g = loss_g + adversarial_loss + 1 * self.hparams.lamb * recon_loss_b
+        if 0:
+            fake_images_b = self.net_g(real_images)
+            recon_loss_b = nn.MSELoss()(fake_images_b, real_images)
+            loss_g = loss_g + adversarial_loss + 1 * self.hparams.lamb * recon_loss_b
+
+        # distance loss
+        A = conditioned_images
+        B = real_images
+        AB = self.net_g(A)
+        BB = self.net_g(B)
+        self.loss_distance_A, self.loss_distance_B = self.get_distance_losses(A, B, AB, BB)
+        self.log('distA', self.loss_distance_A, on_step=False, on_epoch=True,
+                 prog_bar=True, logger=True, sync_dist=True)
+        self.log('distB', self.loss_distance_B, on_step=False, on_epoch=True,
+                 prog_bar=True, logger=True, sync_dist=True)
+
+        loss_g = loss_g + self.loss_distance_A + self.loss_distance_B
 
         return loss_g
 

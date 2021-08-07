@@ -23,7 +23,7 @@ parser.add_argument('--ngf', type=int, default=64, help='generator filters in fi
 parser.add_argument('--ndf', type=int, default=64, help='discriminator filters in first conv layer')
 parser.add_argument('--epoch_count', type=int, default=0, help='the starting epoch count')
 parser.add_argument('--epoch_load', type=int, default=0, help='to load checkpoint form the epoch count')
-parser.add_argument('--n_epochs', type=int, default=500, help='# of iter at starting learning rate')
+parser.add_argument('--n_epochs', type=int, default=300, help='# of iter at starting learning rate')
 parser.add_argument('--n_epochs_decay', type=int, default=100, help='# of iter to linearly decay learning rate to zero')
 parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate f -or adam')
 parser.add_argument('--lr_policy', type=str, default='lambda', help='learning rate policy: lambda|step|plateau|cosine')
@@ -32,6 +32,7 @@ parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. de
 parser.add_argument('--threads', type=int, default=4, help='number of threads for data loader to use')
 parser.add_argument('--seed', type=int, default=123, help='random seed to use. Default=123')
 parser.add_argument('--lamb', type=int, default=100, help='weight on L1 term in objective')
+parser.add_argument('--lseg', type=int, default=0, help='weight on segmentation loss in objective')
 parser.add_argument('--legacy', action='store_true', dest='legacy', default=False, help='legacy pytorch')
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
@@ -57,7 +58,7 @@ test_loader = DataLoader(dataset=test_set, num_workers=opt.threads, batch_size=o
 
 #  Model
 if not opt.legacy:
-    from models.pix2pix0 import Pix2PixModel
+    from models.pix2pix import Pix2PixModel
     import pytorch_lightning as pl
     from pytorch_lightning import loggers as pl_loggers
     logger = pl_loggers.TensorBoardLogger(os.environ.get('LOGS'))
@@ -72,7 +73,7 @@ if not opt.legacy:
                          max_epochs=opt.n_epochs, progress_bar_refresh_rate=20, logger=logger)
     trainer.fit(net, train_loader, test_loader)
 else:
-    from models.pix2pix0 import Pix2PixModel
+    from models.pix2pix import Pix2PixModel
     net = Pix2PixModel(hparams=opt, train_loader=train_loader,
                        test_loader=test_loader, checkpoints=os.environ.get('CHECKPOINTS'))
     net = net.cuda()
@@ -80,4 +81,5 @@ else:
     net.module.overall_loop()
 
 # USAGE
-# CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj painorisizeunet128 --direction a_b --netG unet128
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset TSE_DESS -b 16 --prj TrySeg --direction a_b_bseg
+# CUDA_VISIBLE_DEVICES=0 python train.py --dataset pain -b 16 --prj SegB100 --lseg 100 --direction aregis1_b

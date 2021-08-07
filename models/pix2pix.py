@@ -8,6 +8,7 @@ from math import log10
 import time, os
 import pytorch_lightning as pl
 from models.cyclegan.models import GeneratorResNet, Discriminator
+from utils.metrics_segmentation import SegmentationCrossEntropyLoss
 
 
 def _weights_init(m):
@@ -36,17 +37,14 @@ class Pix2PixModel(pl.LightningModule):
         self.test_loader = test_loader
         self.net_g = define_G(input_nc=hparams.input_nc, output_nc=hparams.output_nc, ngf=64, netG=hparams.netG,
                               norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[])
-        #self.net_d = define_D(input_nc=hparams.input_nc + hparams.output_nc, ndf=64, netD=hparams.netD)
-
-        #self.net_d = Discriminator(input_shape=(6, 256, 256))  ##  use the discriminator from CycleGAN PatchGAN
         if hparams.netD == 'patchgan':
             self.net_d = Discriminator(input_shape=(6, 256, 256))
         else:
             self.net_d = define_D(input_nc=hparams.output_nc * 2, ndf=64, netD=hparams.netD)
 
-
         self.net_g = self.net_g.apply(_weights_init)
         self.net_d = self.net_d.apply(_weights_init)
+        self.seg_model = torch.load(os.environ.get('model_seg')).cuda()
 
         [self.optimizer_d, self.optimizer_g], [] = self.configure_optimizers()
         self.net_g_scheduler = get_scheduler(self.optimizer_g, hparams)
@@ -60,28 +58,61 @@ class Pix2PixModel(pl.LightningModule):
         else:
             self.criterionGAN = GANLoss(hparams.gan_mode).cuda()
 
+        self.segLoss = SegmentationCrossEntropyLoss()
+
     def configure_optimizers(self):
         self.optimizer_g = optim.Adam(self.net_g.parameters(), lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
         self.optimizer_d = optim.Adam(self.net_d.parameters(), lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
 
         return [self.optimizer_d, self.optimizer_g], []
 
-    def backward_g(self, real_images, conditioned_images):
+    def backward_g(self, inputs):
         self.net_g.zero_grad()
+        conditioned_images = inputs[0]
+        real_images = inputs[1]
         fake_images = self.net_g(conditioned_images)
-        #print(torch.cat((fake_images, conditioned_images), 1).shape)
         disc_logits = self.net_d(torch.cat((fake_images, conditioned_images), 1))
         adversarial_loss = self.criterionGAN(disc_logits, torch.ones_like(disc_logits))
 
         # calculate reconstruction loss
         recon_loss = self.criterionL1(fake_images, real_images)
-        lambda_recon = self.hparams.lamb
+        loss_g = adversarial_loss + self.hparams.lamb * recon_loss
 
-        loss_g = adversarial_loss + lambda_recon * recon_loss
+        if 1:
+            if self.hparams.lseg > 0:
+                #fake_images_b = self.net_g(real_images)
+                new_seg = fake_images
+                old_seg = conditioned_images
+
+                # segmentation loss
+                prob = self.seg_model(new_seg)[0]   # (16, 3, 256, 256)
+                if 0: # use the segmented dess mask (bone only)
+                    seg_images = inputs[2]
+                    seg = seg_images.type(torch.LongTensor).cuda()
+                elif 0: # use the segment model for dess
+                    seg = self.seg_model(real_images)[0]
+                    seg = torch.argmax(seg, 1)
+                elif 1:
+                    seg = self.seg_model(old_seg)[0]
+                    seg = torch.argmax(seg, 1)
+                loss_seg, _ = self.segLoss((prob, ), (seg, ))
+                self.log('loss_seg', loss_seg, on_step=False, on_epoch=True,
+                         prog_bar=True, logger=True, sync_dist=True)
+
+                loss_g = loss_g + loss_seg * self.hparams.lseg
+
+        # target domain identity loss
+        if 0:
+            recon_loss_b = nn.MSELoss()(fake_images_b, real_images)
+            #recon_loss_b = self.criterionL1(fake_images_b, real_images)
+            loss_g = loss_g + adversarial_loss + 1 * self.hparams.lamb * recon_loss_b
+
         return loss_g
 
-    def backward_d(self, real_images, conditioned_images):
+    def backward_d(self, inputs):
         self.net_d.zero_grad()
+        conditioned_images = inputs[0]
+        real_images = inputs[1]
         fake_images = self.net_g(conditioned_images).detach()
 
         fake_logits = self.net_d(torch.cat((fake_images, conditioned_images), 1))
@@ -95,12 +126,12 @@ class Pix2PixModel(pl.LightningModule):
         return loss_d
 
     def training_step(self, batch, batch_idx, optimizer_idx):
-        condition, real = batch
+        inputs = batch
         if optimizer_idx == 0:
             #self.net_d.zero_grad()
             #for param in self.net_d.parameters():
             #    param.requires_grad = True
-            loss_d = self.backward_d(real, condition)
+            loss_d = self.backward_d(inputs)
             self.log('loss_d', loss_d, on_step=False, on_epoch=True,
                      prog_bar=True, logger=True, sync_dist=True)
             return loss_d
@@ -109,7 +140,7 @@ class Pix2PixModel(pl.LightningModule):
             #self.net_g.zero_grad()
             #for param in self.net_d.parameters():
             #    param.requires_grad = False
-            loss_g = self.backward_g(real, condition)
+            loss_g = self.backward_g(inputs)
             self.log('loss_g', loss_g, on_step=False, on_epoch=True,
                      prog_bar=True, logger=True, sync_dist=True)
             return loss_g
@@ -127,7 +158,7 @@ class Pix2PixModel(pl.LightningModule):
                 os.mkdir(os.path.join(dir_checkpoints, hparams.prj))
             net_g_model_out_path = dir_checkpoints + "/{}/netG_model_epoch_{}.pth".format(hparams.prj, self.epoch)
             net_d_model_out_path = dir_checkpoints + "/{}/netD_model_epoch_{}.pth".format(hparams.prj, self.epoch)
-            ++(self.net_g, net_g_model_out_path)
+            torch.save(self.net_g, net_g_model_out_path)
             torch.save(self.net_d, net_d_model_out_path)
             print("Checkpoint saved to {}".format(dir_checkpoints + '/' + hparams.prj))
 
