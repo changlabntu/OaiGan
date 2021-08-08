@@ -6,10 +6,12 @@ import pytorch_lightning as pl
 from utils.data_utils import imagesc, to_8bit
 from PIL import Image
 import cv2
+from dotenv import load_dotenv
+load_dotenv('.env')
 
 
 def load_OAI_var():
-    all_path = os.path.join(os.path.expanduser('~'), 'Dropbox') + '/Z_DL/OAIDataBase/OAI_Labels/'
+    all_path = os.path.join(os.path.expanduser('~'), 'Dropbox') + '/TheSource/OAIDataBase/OAI_Labels/'
     print(all_path)
     all_var = glob.glob(all_path + '*.npy')
     all_var.sort()
@@ -40,31 +42,31 @@ def get_OAI_pain_labels():
 
 
 def pain_prepare():
-    mri_left = np.load('/media/ghc/GHc_data1/OAI_uni_pain/unilateral_pain_left_womac3.npy')
-    mri_right = np.load('/media/ghc/GHc_data1/OAI_uni_pain/unilateral_pain_right_womac3.npy')
+    mri_left = np.load('/media/ghc/GHc_data1/Dataset/OAI_uni_pain/unilateral_pain_left_womac3.npy')
+    mri_right = np.load('/media/ghc/GHc_data1/Dataset/OAI_uni_pain/unilateral_pain_right_womac3.npy')
     label = get_OAI_pain_labels()
 
     for i in range(71 * 7):
-        for s in range(5, 23, 2):
+        for s in range(0, 23, 1):
             if label[i] == 0:
                 s_a = mri_left[i, 0, :, :, s]
                 s_b = mri_right[i, 0, :, :, s]
             elif label[i] == 1:
                 s_a = mri_right[i, 0, :, :, s]
                 s_b = mri_left[i, 0, :, :, s]
-            imagesc(s_a, show=False, save='dataset/pain/train/a/' + str(i) + '_' + str(s) + '.png')
-            imagesc(s_b, show=False, save='dataset/pain/train/b/' + str(i) + '_' + str(s) + '.png')
+            imagesc(s_a, show=False, save=os.environ.get('DATASET') + 'painfull/train/a/' + str(i) + '_' + str(s) + '.png')
+            imagesc(s_b, show=False, save=os.environ.get('DATASET') + 'painfull/train/b/' + str(i) + '_' + str(s) + '.png')
 
     for i in range(71 * 7, 710):
-        for s in range(5, 23, 2):
+        for s in range(0, 23, 1):
             if label[i] == 0:
                 s_a = mri_left[i, 0, :, :, s]
                 s_b = mri_right[i, 0, :, :, s]
             elif label[i] == 1:
                 s_a = mri_right[i, 0, :, :, s]
                 s_b = mri_left[i, 0, :, :, s]
-            imagesc(s_a, show=False, save='dataset/pain/test/a/' + str(i) + '_' + str(s) + '.png')
-            imagesc(s_b, show=False, save='dataset/pain/test/b/' + str(i) + '_' + str(s) + '.png')
+            imagesc(s_a, show=False, save=os.environ.get('DATASET') + 'paired_images/painfull/test/a/' + str(i) + '_' + str(s) + '.png')
+            imagesc(s_b, show=False, save=os.environ.get('DATASET') + 'paired_images/painfull/test/b/' + str(i) + '_' + str(s) + '.png')
 
 
 def linear_registration(im1, im2, warp_mode, show=True):
@@ -109,7 +111,7 @@ def create_registered(alist, blist, destination):
         except:
             try:
                 new = linear_registration(im1=im1, im2=im2, warp_mode=1, show=False)
-                imagesc(new, show=False, save=destination+alist[i].split('/')[-1])
+                imagesc(new, show=False, save=destination + alist[i].split('/')[-1])
             except:
                 imagesc(im2, show=False, save=destination + alist[i].split('/')[-1])
 
@@ -118,9 +120,13 @@ def create_registered(alist, blist, destination):
 #                  blist=sorted(glob.glob('/home/ghc/Dropbox/Z_DL/scripts/lightning_pix2pix/dataset/pain/train/b/*')),
 #                  destination='/home/ghc/Dropbox/Z_DL/scripts/lightning_pix2pix/dataset/pain1/train/a/')
 
-create_registered(alist=sorted(glob.glob('/home/ghc/Dropbox/Z_DL/scripts/lightning_pix2pix/dataset/pain/test/a/*'))[642:643],
-                  blist=sorted(glob.glob('/home/ghc/Dropbox/Z_DL/scripts/lightning_pix2pix/dataset/pain/test/b/*'))[642:643],
-                  destination='/home/ghc/Dropbox/Z_DL/scripts/lightning_pix2pix/dataset/pain1/test/a/')
+if __name__ == '__main__':
+    #pain_prepare()
+
+    source = os.environ.get('DATASET') + 'painfull/'
+    create_registered(alist=sorted(glob.glob(source + '/test/a/*')),
+                      blist=sorted(glob.glob(source + '/test/b/*')),
+                      destination=source + '/test/aregis/')
 
 #imagesc(make_compare(im1[:, :, 0], im2[:, :, 0]))
 #imagesc(make_compare(im1[:, :, 0], nb))

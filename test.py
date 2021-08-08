@@ -168,12 +168,12 @@ if __name__ == '__main__':
 
         #diff = aover
 
-        if not opt.t2d:
-            imagesc(torch.cat([a_all, aover, b_all, bover, o_all, oover], 1), show=False,
-                    save=os.path.join("result", opt.prj, str(epoch) + '.jpg'))
-        else:
-            imagesc(torch.cat([a_all, b_all, o_all, diff], 1), show=False,
-                    save=os.path.join("result", opt.prj, str(epoch) + '.jpg'))
+        #if not opt.t2d:
+        imagesc(torch.cat([a_all, aover, b_all, bover, o_all, oover, diff], 1), show=False,
+                save=os.path.join("result", opt.prj, str(epoch) + '.jpg'))
+        #else:
+        #    imagesc(torch.cat([a_all, b_all, o_all, diff], 1), show=False,
+        #            save=os.path.join("result", opt.prj, str(epoch) + '.jpg'))
 
 
 # USAGE
