@@ -70,6 +70,10 @@ class Pix2PixModel(pl.LightningModule):
         self.net_g.zero_grad()
         conditioned_images = inputs[0]
         real_images = inputs[1]
+        if self.hparams.bysubject:
+            conditioned_images = conditioned_images[0, ::]
+            real_images = real_images[0, ::]
+
         fake_images = self.net_g(conditioned_images)
         disc_logits = self.net_d(torch.cat((fake_images, conditioned_images), 1))
         adversarial_loss = self.criterionGAN(disc_logits, torch.ones_like(disc_logits))
@@ -78,28 +82,27 @@ class Pix2PixModel(pl.LightningModule):
         recon_loss = self.criterionL1(fake_images, real_images)
         loss_g = adversarial_loss + self.hparams.lamb * recon_loss
 
-        if 1:
-            if self.hparams.lseg > 0:
-                #fake_images_b = self.net_g(real_images)
-                new_seg = fake_images
-                old_seg = conditioned_images
+        if self.hparams.lseg > 0:
+            #fake_images_b = self.net_g(real_images)
+            new_seg = fake_images
+            old_seg = conditioned_images
 
-                # segmentation loss
-                prob = self.seg_model(new_seg)[0]   # (16, 3, 256, 256)
-                if 0: # use the segmented dess mask (bone only)
-                    seg_images = inputs[2]
-                    seg = seg_images.type(torch.LongTensor).cuda()
-                elif 0: # use the segment model for dess
-                    seg = self.seg_model(real_images)[0]
-                    seg = torch.argmax(seg, 1)
-                elif 1:
-                    seg = self.seg_model(old_seg)[0]
-                    seg = torch.argmax(seg, 1)
-                loss_seg, _ = self.segLoss((prob, ), (seg, ))
-                self.log('loss_seg', loss_seg, on_step=False, on_epoch=True,
-                         prog_bar=True, logger=True, sync_dist=True)
+            # segmentation loss
+            prob = self.seg_model(new_seg)[0]   # (16, 3, 256, 256)
+            if 0: # use the segmented dess mask (bone only)
+                seg_images = inputs[2]
+                seg = seg_images.type(torch.LongTensor).cuda()
+            elif 0: # use the segment model for dess
+                seg = self.seg_model(real_images)[0]
+                seg = torch.argmax(seg, 1)
+            elif 1:
+                seg = self.seg_model(old_seg)[0]
+                seg = torch.argmax(seg, 1)
+            loss_seg, _ = self.segLoss((prob, ), (seg, ))
+            self.log('loss_seg', loss_seg, on_step=False, on_epoch=True,
+                     prog_bar=True, logger=True, sync_dist=True)
 
-                loss_g = loss_g + loss_seg * self.hparams.lseg
+            loss_g = loss_g + loss_seg * self.hparams.lseg
 
         # target domain identity loss
         if 0:
@@ -113,6 +116,9 @@ class Pix2PixModel(pl.LightningModule):
         self.net_d.zero_grad()
         conditioned_images = inputs[0]
         real_images = inputs[1]
+        if self.hparams.bysubject:
+            conditioned_images = conditioned_images[0, ::]
+            real_images = real_images[0, ::]
         fake_images = self.net_g(conditioned_images).detach()
 
         fake_logits = self.net_d(torch.cat((fake_images, conditioned_images), 1))

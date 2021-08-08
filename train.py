@@ -6,14 +6,14 @@ import os
 from dotenv import load_dotenv
 load_dotenv('.env')
 
-
-# Training settings
 parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
-parser.add_argument('--dataset', type=str, default='facades')
+# Data
+parser.add_argument('--dataset', type=str, default='pain')
+parser.add_argument('--bysubject', action='store_true', dest='bysubject', default=False)
 parser.add_argument('--prj', type=str, default='', help='name of the project')
-parser.add_argument('-b', dest='batch_size', type=int, default=1, help='training batch size')
-parser.add_argument('--test_batch_size', type=int, default=1, help='testing batch size')
 parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
+parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
+# Model
 parser.add_argument('--gan_mode', type=str, default='vanilla', help='gan mode')
 parser.add_argument('--netG', type=str, default='unet_256', help='netG model')
 parser.add_argument('--netD', type=str, default='patchgan', help='netD model')
@@ -21,6 +21,9 @@ parser.add_argument('--input_nc', type=int, default=3, help='input image channel
 parser.add_argument('--output_nc', type=int, default=3, help='output image channels')
 parser.add_argument('--ngf', type=int, default=64, help='generator filters in first conv layer')
 parser.add_argument('--ndf', type=int, default=64, help='discriminator filters in first conv layer')
+# Training
+parser.add_argument('-b', dest='batch_size', type=int, default=1, help='training batch size')
+parser.add_argument('--test_batch_size', type=int, default=1, help='testing batch size')
 parser.add_argument('--epoch_count', type=int, default=0, help='the starting epoch count')
 parser.add_argument('--epoch_load', type=int, default=0, help='to load checkpoint form the epoch count')
 parser.add_argument('--n_epochs', type=int, default=300, help='# of iter at starting learning rate')
@@ -36,7 +39,7 @@ parser.add_argument('--lseg', type=int, default=0, help='weight on segmentation 
 parser.add_argument('--legacy', action='store_true', dest='legacy', default=False, help='legacy pytorch')
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
-opt = parser.parse_args()#(args=[])
+opt = parser.parse_args()
 opt.prj = opt.dataset + '_' + opt.prj
 print(opt)
 
@@ -45,10 +48,13 @@ print(opt)
 #torch.cuda.manual_seed(opt.seed)
 
 #  Dataset
-from dataloader.data import get_training_set, get_test_set
-root_path = os.environ.get('DATASET')
-train_set = get_training_set(root_path + opt.dataset, opt.direction, mode='train')
-test_set = get_test_set(root_path + opt.dataset, opt.direction, mode='train')
+if opt.bysubject:
+    from dataloader.data import DatasetFromFolderSubjects as Dataset
+else:
+    from dataloader.data import DatasetFromFolder as Dataset
+
+train_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/train/', opt, mode='train')
+test_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/test/', opt, mode='test')
 
 print('training set length: ' + str(len(train_set)))
 print('testing set length: ' + str(len(test_set)))
@@ -82,4 +88,5 @@ else:
 
 # USAGE
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset TSE_DESS -b 16 --prj TrySeg --direction a_b_bseg
-# CUDA_VISIBLE_DEVICES=0 python train.py --dataset pain -b 16 --prj SegB100 --lseg 100 --direction aregis1_b
+# CUDA_VISIBLE_DEVICES=2 python train.py --dataset painfull -b 23 --prj patch16 --lseg 0 --direction aregis1_b
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 1 --prj bysubject --lseg 0 --direction aregis1_b --bysubject
