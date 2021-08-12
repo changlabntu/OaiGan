@@ -53,6 +53,7 @@ parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
 parser.add_argument('--dataset', default='TSE_DESS')
 parser.add_argument('--prj', type=str, default='TrySeg20', help='name of the project')
 parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
+parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
 parser.add_argument('--crop', type=int, default=0)
 parser.add_argument('--nepochs', nargs='+', default=[0, 600, 20], help='which checkpoints to be interfered with')
 parser.add_argument('--mode', type=str, default='dummy')
@@ -72,8 +73,8 @@ if __name__ == '__main__':
     else:
         from dataloader.data import get_test_set
     root_path = os.environ.get('DATASET')
-    test_set = get_test_set(root_path + opt.dataset, opt.direction, mode='test')
-    #test_set = get_test_set(root_path + 'pain', opt.direction, mode='test')
+    #test_set = get_test_set(root_path + opt.dataset, opt, mode='test')
+    test_set = get_test_set(root_path + 'pain', opt, mode='test')
     x = test_set.__getitem__(0)
 
     if not os.path.exists(os.path.join("result", opt.prj)):
