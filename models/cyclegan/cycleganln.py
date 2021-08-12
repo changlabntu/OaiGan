@@ -247,3 +247,7 @@ class CycleGanModel(LightningModule):
         self.epoch += 1
         self.tini = time.time()
         self.avg_psnr = 0
+
+        print(self.train_loader.dataset.index_b)
+        self.train_loader.dataset.reshuffle_b()
+

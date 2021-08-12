@@ -7,20 +7,25 @@ from dotenv import load_dotenv
 load_dotenv('.env')
 
 
-# Training settings
+# Project
 parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
 parser.add_argument('--dataset', type=str, default='facades')
 parser.add_argument('--prj', type=str, default='', help='name of the project')
-parser.add_argument('-b', dest='batch_size', type=int, default=1, help='training batch size')
+# Data
 parser.add_argument('--test_batch_size', type=int, default=1, help='testing batch size')
 parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
-#parser.add_argument('--gan_mode', type=str, default='lsgan', help='gan mode')
+parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
+parser.add_argument('--unpaired', action='store_false', dest='paired', default=True, help='paired data')
+# Models
+parser.add_argument('--gan_mode', type=str, default='lsgan', help='gan mode')
 parser.add_argument('--netG', type=str, default='unet_256', help='netG model')
 parser.add_argument('--netD', type=str, default='cycle', help='netD model')
 parser.add_argument('--input_nc', type=int, default=3, help='input image channels')
 parser.add_argument('--output_nc', type=int, default=3, help='output image channels')
 parser.add_argument('--ngf', type=int, default=64, help='generator filters in first conv layer')
 parser.add_argument('--ndf', type=int, default=64, help='discriminator filters in first conv layer')
+# Training
+parser.add_argument('-b', dest='batch_size', type=int, default=1, help='training batch size')
 parser.add_argument('--epoch_count', type=int, default=0, help='the starting epoch count')
 parser.add_argument('--epoch_load', type=int, default=0, help='to load checkpoint form the epoch count')
 parser.add_argument('--n_epochs', type=int, default=500, help='# of iter at starting learning rate')
@@ -50,10 +55,10 @@ if opt.dataset == 'dess':
     train_set = DatasetDessSegmentation(mode='train', direction=opt.direction)
     test_set = DatasetDessSegmentation(mode='val', direction=opt.direction)
 else:
-    from dataloader.data import get_training_set, get_test_set
+    from dataloader.data_cycle import DatasetFromFolder as Dataset
     root_path = os.environ.get('DATASET')
-    train_set = get_training_set(root_path + opt.dataset, opt.direction, mode='train')
-    test_set = get_test_set(root_path + opt.dataset, opt.direction, mode='train')
+    train_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/train/', opt, mode='train')
+    test_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/test/', opt, mode='test')
 
 print('training set length: ' + str(len(train_set)))
 print('testing set length: ' + str(len(test_set)))
@@ -75,10 +80,12 @@ if not opt.legacy:
     print(net.hparams)
     trainer = pl.Trainer(gpus=[0],  # distributed_backend='ddp',
                          max_epochs=opt.n_epochs, progress_bar_refresh_rate=20, logger=logger)
+    trainer.train_loader = train_loader
     trainer.fit(net, train_loader, test_loader)
 else:
     print('Legacy mode not implemented!')
 
 # USAGE
-# CUDA_VISIBLE_DEVICES=1 python train_cycle.py --dataset painpickedgood -b 1 --prj original_size --direction a_b
-# CUDA_VISIBLE_DEVICES=1 python train_cycle.py --dataset pain -b 1 --prj cycle_eff --direction aregis1eff1_b
+# CUDA_VISIBLE_DEVICES=0 python train_cycle.py --dataset pain -b 1 --prj cycle_eff_check --direction aregis1eff1_b
+# CUDA_VISIBLE_DEVICES=1 python train_cycle.py --dataset TSE_DESS -b 1 --prj cycle_check --direction a_b
+# CUDA_VISIBLE_DEVICES=2 python train_cycle.py --dataset effusionv0 -b 1 --prj cycle_eff_unpaired --direction a_b --unpaired

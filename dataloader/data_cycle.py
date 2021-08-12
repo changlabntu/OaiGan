@@ -88,20 +88,40 @@ class DatasetFromFolder(data.Dataset):
         super(DatasetFromFolder, self).__init__()
         self.opt = opt
         self.mode = mode
+        self.paired = opt.paired
         self.a_path = join(image_dir, self.opt.direction.split('_')[0])
         self.b_path = join(image_dir, self.opt.direction.split('_')[1])
-        self.image = sorted([x.split('/')[-1] for x in glob.glob(self.a_path+'/*')])
+        if self.paired:
+            self.image = sorted([x.split('/')[-1] for x in glob.glob(self.a_path+'/*')])
+        else:
+            self.image_a = sorted([x.split('/')[-1] for x in glob.glob(self.a_path+'/*')])
+            self.image_b = sorted([x.split('/')[-1] for x in glob.glob(self.b_path+'/*')])
 
+        self.reshuffle_b()
         #transform_list = [transforms.ToTensor(),
         #                  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
         #self.transform = transforms.Compose(transform_list)
 
+    def reshuffle_b(self):
+        self.index_b = [x for x in range(len(self))]
+        random.shuffle(self.index_b)
+
     def __len__(self):
-        return len(self.image)
+        if self.paired:
+            return len(self.image)
+        else:
+            print(len(self.image_a))
+            print(len(self.image_b))
+            return min(len(self.image_a), len(self.image_b))
 
     def __getitem__(self, index):
-        a = Image.open(join(self.a_path, self.image[index]))  #.convert('RGB') (DESS: 294>286) (PAIN: 224>286)
-        b = Image.open(join(self.b_path, self.image[index]))  #.convert('RGB')
+        if self.paired:
+            a = Image.open(join(self.a_path, self.image[index]))  #.convert('RGB') (DESS: 294>286) (PAIN: 224>286)
+            b = Image.open(join(self.b_path, self.image[index]))  #.convert('RGB')
+        else:
+            a = Image.open(join(self.a_path, self.image_a[index]))  # .convert('RGB') (DESS: 294>286) (PAIN: 224>286)
+            b = Image.open(join(self.b_path, self.image_b[self.index_b[index]]))  # .convert('RGB') (DESS: 294>286) (PAIN: 224>286)
+
         a = a.resize((286, 286), Image.BICUBIC)  # 444 > 286
         b = b.resize((286, 286), Image.BICUBIC)
         a = transforms.ToTensor()(a)
