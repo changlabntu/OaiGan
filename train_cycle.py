@@ -17,7 +17,7 @@ parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
 parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
 parser.add_argument('--unpaired', action='store_false', dest='paired', default=True, help='paired data')
 # Models
-parser.add_argument('--gan_mode', type=str, default='lsgan', help='gan mode')
+parser.add_argument('--gan_mode', type=str, default='vanilla', help='gan mode')
 parser.add_argument('--netG', type=str, default='unet_256', help='netG model')
 parser.add_argument('--netD', type=str, default='cycle', help='netD model')
 parser.add_argument('--input_nc', type=int, default=3, help='input image channels')
@@ -80,7 +80,7 @@ if not opt.legacy:
     print(net.hparams)
     trainer = pl.Trainer(gpus=[0],  # distributed_backend='ddp',
                          max_epochs=opt.n_epochs, progress_bar_refresh_rate=20, logger=logger)
-    trainer.train_loader = train_loader
+    net.train_loader = train_loader
     trainer.fit(net, train_loader, test_loader)
 else:
     print('Legacy mode not implemented!')

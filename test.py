@@ -68,13 +68,11 @@ print(opt)
 
 if __name__ == '__main__':
     dir_checkpoints = os.environ.get('CHECKPOINTS')
-    if not opt.cycle:
-        from dataloader.data import get_test_set
-    else:
-        from dataloader.data import get_test_set
+    from dataloader.data import DatasetFromFolder as Dataset
     root_path = os.environ.get('DATASET')
     #test_set = get_test_set(root_path + opt.dataset, opt, mode='test')
-    test_set = get_test_set(root_path + 'pain', opt, mode='test')
+    #test_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/test/', opt, mode='test')
+    test_set = Dataset(os.environ.get('DATASET') + 'pain' + '/test/', opt, mode='test')
     x = test_set.__getitem__(0)
 
     if not os.path.exists(os.path.join("result", opt.prj)):
@@ -178,6 +176,7 @@ if __name__ == '__main__':
 
 
 # USAGE
+# CUDA_VISIBLE_DEVICES=3 python test.py --dataset pain --nepochs 0 601 20 --prj cycle_eff_check --direction a_b --cycle
 # CUDA_VISIBLE_DEVICES=1 python test.py --dataset pain --nepochs 0 601 20 --prj wseg1000 --direction a_b
 # CUDA_VISIBLE_DEVICES=3 python test.py --dataset TSE_DESS --nepochs 0 601 20 --prj up256patchgan --direction a_b
 # CUDA_VISIBLE_DEVICES=2 python test.py --dataset TSE_DESS --nepochs 0 601 20 --prj TrySeg100cartilage --direction a_b

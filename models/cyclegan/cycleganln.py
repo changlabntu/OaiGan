@@ -242,12 +242,14 @@ class CycleGanModel(LightningModule):
             net_g_ba_model_out_path = dir_checkpoints + "/{}/netG_ba_model_epoch_{}.pth".format(hparams.prj, self.epoch)
             torch.save(self.G_AB, net_g_ab_model_out_path)
             torch.save(self.G_BA, net_g_ba_model_out_path)
+            net_d_model_out_path = dir_checkpoints + "/{}/netD_model_epoch_{}.pth".format(hparams.prj, self.epoch)
+            torch.save(self.net_d, net_d_model_out_path)
             print("Checkpoint saved to {}".format(dir_checkpoints + '/' + hparams.prj))
 
         self.epoch += 1
         self.tini = time.time()
         self.avg_psnr = 0
 
-        print(self.train_loader.dataset.index_b)
+        # shuffle index of image_b for cyclegan
         self.train_loader.dataset.reshuffle_b()
 

@@ -32,7 +32,7 @@ class Pix2PixModel(pl.LightningModule):
         self.avg_psnr = 0
 
         # opts
-        self.hparams = hparams
+        self.hparams.update(vars(hparams))
         self.train_loader = train_loader
         self.test_loader = test_loader
         self.net_g = define_G(input_nc=hparams.input_nc, output_nc=hparams.output_nc, ngf=64, netG=hparams.netG,
