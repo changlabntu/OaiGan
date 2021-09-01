@@ -7,7 +7,6 @@ from models.loss import GANLoss
 from math import log10
 import time, os
 import pytorch_lightning as pl
-from models.cyclegan.models import GeneratorResNet, Discriminator
 from utils.metrics_segmentation import SegmentationCrossEntropyLoss
 
 
@@ -35,12 +34,31 @@ class Pix2PixModel(pl.LightningModule):
         self.hparams.update(vars(hparams))
         self.train_loader = train_loader
         self.test_loader = test_loader
-        self.net_g = define_G(input_nc=hparams.input_nc, output_nc=hparams.output_nc, ngf=64, netG=hparams.netG,
-                              norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[])
-        if hparams.netD == 'patchgan':
-            self.net_d = Discriminator(input_shape=(6, 256, 256))
+
+        # generator and discriminator model
+        if (hparams.netG).startswith('Attv1'):
+            from models.AttentionGANv1.mymodel import Generator, Discriminator
+            # plus one because the first channel is for attention mask
+            self.net_g = Generator(hparams.netG, input_nc=hparams.input_nc, output_nc=hparams.output_nc+1, ngf=64,
+                                   norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6)
+            self.net_d = Discriminator()
+
+        # AttUNet
+        elif hparams.netG == 'AttUNet':
+            from models.AttentionUNet.model import AttU_Net
+            hparams.use_attention = [False, False, False, True]
+            self.net_g = AttU_Net(n_channels=hparams.input_nc, n_classes=hparams.output_nc,
+                                  scale_factor=1, use_attention=hparams.use_attention)
+
         else:
-            self.net_d = define_D(input_nc=hparams.output_nc * 2, ndf=64, netD=hparams.netD)
+            # original
+            self.net_g = define_G(input_nc=hparams.input_nc, output_nc=hparams.output_nc, ngf=64, netG=hparams.netG,
+                                  norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[])
+            if (hparams.netD).startswith('patchgan'):
+                from models.cyclegan.models import Discriminator
+                self.net_d = Discriminator(input_shape=(6, 256, 256), patch=(hparams.netD).split('_')[-1])
+            else:
+                self.net_d = define_D(input_nc=hparams.output_nc * 2, ndf=64, netD=hparams.netD)
 
         self.net_g = self.net_g.apply(_weights_init)
         self.net_d = self.net_d.apply(_weights_init)
@@ -60,6 +78,9 @@ class Pix2PixModel(pl.LightningModule):
 
         self.segLoss = SegmentationCrossEntropyLoss()
 
+        # final hparams
+        self.hparams.update(vars(hparams))
+
     def configure_optimizers(self):
         self.optimizer_g = optim.Adam(self.net_g.parameters(), lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
         self.optimizer_d = optim.Adam(self.net_d.parameters(), lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
@@ -74,7 +95,8 @@ class Pix2PixModel(pl.LightningModule):
             conditioned_images = conditioned_images[0, ::]
             real_images = real_images[0, ::]
 
-        fake_images = self.net_g(conditioned_images)
+        gout = self.net_g(conditioned_images)
+        fake_images = gout[0]
         disc_logits = self.net_d(torch.cat((fake_images, conditioned_images), 1))
         adversarial_loss = self.criterionGAN(disc_logits, torch.ones_like(disc_logits))
 
@@ -119,7 +141,8 @@ class Pix2PixModel(pl.LightningModule):
         if self.hparams.bysubject:
             conditioned_images = conditioned_images[0, ::]
             real_images = real_images[0, ::]
-        fake_images = self.net_g(conditioned_images).detach()
+        gout = self.net_g(conditioned_images)
+        fake_images = gout[0].detach()
 
         fake_logits = self.net_d(torch.cat((fake_images, conditioned_images), 1))
         real_logits = self.net_d(torch.cat((real_images, conditioned_images), 1))

@@ -368,7 +368,7 @@ class UnetGenerator(nn.Module):
 
     def forward(self, input):
         """Standard forward"""
-        return self.model(input)
+        return self.model(input),
 
 
 class UnetSkipConnectionBlock(nn.Module):

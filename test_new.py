@@ -21,7 +21,7 @@ def norm_01(x):
     return x
 
 
-def get_model(epochs, name):
+def get_model(epochs, name, dir_checkpoints, device):
     model_path = dir_checkpoints + "{}/{}_model_epoch_{}.pth".format(opt.prj, name, epochs)
     net = torch.load(model_path).to(device)
     return net
@@ -57,7 +57,7 @@ parser.add_argument('--prj', type=str, default='AttGAN0', help='name of the proj
 parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
 parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
 parser.add_argument('--crop', type=int, default=0)
-parser.add_argument('--nepochs', nargs='+', default=[0, 300, 20], help='which checkpoints to be interfered with')
+parser.add_argument('--nepochs', nargs='+', default=[260, 280, 20], help='which checkpoints to be interfered with')
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
 parser.add_argument('--cycle', action='store_true', dest='cycle', default=False)
@@ -68,27 +68,47 @@ opt.prj = opt.dataset + '_' + opt.prj
 opt.nepochs = range(int(opt.nepochs[0]), int(opt.nepochs[1]), int(opt.nepochs[2]))
 print(opt)
 
+
+class Pix2PixModel:
+    def __init__(self, opt):
+        self.opt = opt
+        self.dir_checkpoints = os.environ.get('CHECKPOINTS')
+        from dataloader.data import DatasetFromFolder as Dataset
+
+        if opt.testset:
+            self.test_set = Dataset(os.environ.get('DATASET') + opt.testset + '/test/', opt, mode='test')
+        else:
+            self.test_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/test/', opt, mode='test')
+
+        if not os.path.exists(os.path.join("result", opt.prj)):
+            os.makedirs(os.path.join("result", opt.prj))
+
+        self.seg_model = torch.load(os.environ.get('model_seg')).cuda()
+        self.netg_t2d = torch.load(os.environ.get('model_t2d')).cuda()
+
+        self.device = torch.device("cuda:0")
+
+        self.irange = [15, 19, 34, 79, 95, 109, 172, 173, 208, 249, 266]  # pain
+        # irange = [102, 109, 128, 190, 193, 235, 252, 276, 318, 335]
+
+    def get_one_output(self, i):
+        opt = self.opt
+        x = self.test_set.__getitem__(i)
+        img = x[0]
+        mask = x[1]
+
+        # model
+        input = img.unsqueeze(0).to(self.device)
+        if not opt.cycle:
+            net_g = get_model(epoch, 'netG', self.dir_checkpoints, self.device)
+        else:
+            net_g = get_model(epoch, 'netG_ab', self.dir_checkpoints, self.device)
+        out = net_g(input)
+        return img, mask, out
+
+
+
 if __name__ == '__main__':
-    dir_checkpoints = os.environ.get('CHECKPOINTS')
-    from dataloader.data import DatasetFromFolder as Dataset
-
-    root_path = os.environ.get('DATASET')
-    if opt.testset:
-        test_set = Dataset(os.environ.get('DATASET') + opt.testset + '/test/', opt, mode='test')
-    else:
-        test_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/test/', opt, mode='test')
-
-    if not os.path.exists(os.path.join("result", opt.prj)):
-        os.makedirs(os.path.join("result", opt.prj))
-
-    seg_model = torch.load(os.environ.get('model_seg')).cuda()
-    netg_t2d = torch.load(os.environ.get('model_t2d')).cuda()
-
-    device = torch.device("cuda:0")
-
-    irange = [15, 19, 34, 79, 95, 109, 172, 173, 208, 249, 266]  # pain
-    # irange = [102, 109, 128, 190, 193, 235, 252, 276, 318, 335]
-
     for epoch in opt.nepochs:
         a_all = []
         b_all = []
@@ -111,9 +131,7 @@ if __name__ == '__main__':
                 net_g = get_model(epoch, name='netG')
             else:
                 net_g = get_model(epoch, name='netG_ab')
-            net_g.use_attention = [True, True, True, True]
-            output = net_g(input)
-            out = output[0]
+            out = net_g(input)
 
             if opt.crop:
                 img = img[:, opt.crop:-opt.crop, opt.crop:-opt.crop]
@@ -122,8 +140,8 @@ if __name__ == '__main__':
 
             # T2D
             if opt.t2d:
-                a_t2d = netg_t2d(img.cuda().unsqueeze(0))[0].detach().cpu()
-                out_t2d = netg_t2d(out.cuda())[0].detach().cpu()
+                a_t2d = netg_t2d(img.cuda().unsqueeze(0)).detach().cpu()
+                out_t2d = netg_t2d(out.cuda()).detach().cpu()
             else:
                 a_t2d = img.unsqueeze(0).detach().cpu()
                 out_t2d = out.detach().cpu()

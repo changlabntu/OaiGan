@@ -26,7 +26,7 @@ parser.add_argument('-b', dest='batch_size', type=int, default=1, help='training
 parser.add_argument('--test_batch_size', type=int, default=1, help='testing batch size')
 parser.add_argument('--epoch_count', type=int, default=0, help='the starting epoch count')
 parser.add_argument('--epoch_load', type=int, default=0, help='to load checkpoint form the epoch count')
-parser.add_argument('--n_epochs', type=int, default=300, help='# of iter at starting learning rate')
+parser.add_argument('--n_epochs', type=int, default=300+1, help='# of iter at starting learning rate')
 parser.add_argument('--n_epochs_decay', type=int, default=100, help='# of iter to linearly decay learning rate to zero')
 parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate f -or adam')
 parser.add_argument('--lr_policy', type=str, default='lambda', help='learning rate policy: lambda|step|plateau|cosine')
@@ -90,3 +90,7 @@ else:
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset TSE_DESS -b 16 --prj TrySeg --direction a_b_bseg
 # CUDA_VISIBLE_DEVICES=2 python train.py --dataset painfull -b 23 --prj patch16 --lseg 0 --direction aregis1_b
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 1 --prj bysubject --lseg 0 --direction aregis1_b --bysubject
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj check --lseg 0 --direction aregis1_b
+# CUDA_VISIBLE_DEVICES=0 python train.py --dataset pain -b 16 --prj Attv1_0 --lseg 0 --direction aregis1_b --netG Attv1_0
+
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj AttUNet0 --lseg 0 --direction aregis1_b --netG AttUNet
