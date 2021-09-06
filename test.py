@@ -53,11 +53,11 @@ def overlap_red2(x0, y0, channel):
 parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
 parser.add_argument('--dataset', default='pain', help='name of training dataset')
 parser.add_argument('--testset', default=None, help='name of testing dataset')
-parser.add_argument('--prj', type=str, default='AttGAN0', help='name of the project')
+parser.add_argument('--prj', type=str, default='Attv1_0', help='name of the project')
 parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
 parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
 parser.add_argument('--crop', type=int, default=0)
-parser.add_argument('--nepochs', nargs='+', default=[0, 300, 20], help='which checkpoints to be interfered with')
+parser.add_argument('--nepochs', nargs='+', default=[200, 220, 20], help='which checkpoints to be interfered with')
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
 parser.add_argument('--cycle', action='store_true', dest='cycle', default=False)
@@ -183,3 +183,6 @@ if __name__ == '__main__':
 # CUDA_VISIBLE_DEVICES=1 python test.py --dataset pain --nepochs 0 601 20 --prj wseg1000 --direction a_b
 # CUDA_VISIBLE_DEVICES=3 python test.py --dataset TSE_DESS --nepochs 0 601 20 --prj up256patchgan --direction a_b
 # CUDA_VISIBLE_DEVICES=2 python test.py --dataset TSE_DESS --nepochs 0 601 20 --prj TrySeg100cartilage --direction a_b
+
+
+# CUDA_VISIBLE_DEVICES=1 python test.py --dataset painfull --testset pain --nepochs 0 601 20 --prj bysubjectSeg20--direction a_b

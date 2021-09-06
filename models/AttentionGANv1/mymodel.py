@@ -62,18 +62,9 @@ class Generator(nn.Module):
             output = self.encoder(input)
             output = self.decoder(output)
             content_mask = output[:, 1:]
-            attention_mask = F.tanh(output[:, :1])
+            attention_mask = F.sigmoid(output[:, :1])
             attention_mask = attention_mask.repeat(1, 3, 1, 1)
-            result = content_mask * attention_mask + input * (1 - attention_mask)
-        if self.netG == 'Attv1_2':
-            mid = self.encoder(input)
-            output = self.decoder(mid)
-            content_mask = output[:, 1:]
-            attention_mask = F.tanh(mid[:, :1, ::])
-            attention_mask = attention_mask.repeat(1, 3, 1, 1)
-            attention_mask = nn.Upsample(size=(256, 256))(attention_mask)
-            result = content_mask * attention_mask + input * (1 - attention_mask)
-
+            result = -1 * content_mask * attention_mask + input
         return result, attention_mask, content_mask
 
 
