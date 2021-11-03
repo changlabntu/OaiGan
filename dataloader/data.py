@@ -91,45 +91,40 @@ class DatasetFromFolder(data.Dataset):
         self.a_path = join(image_dir, self.opt.direction.split('_')[0])
         self.b_path = join(image_dir, self.opt.direction.split('_')[1])
         self.image = sorted([x.split('/')[-1] for x in glob.glob(self.a_path+'/*')])
-
-        #transform_list = [transforms.ToTensor(),
-        #                  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-        #self.transform = transforms.Compose(transform_list)
+        self.resize = opt.resize
 
     def __len__(self):
         return len(self.image)
 
     def __getitem__(self, index):
         a = Image.open(join(self.a_path, self.image[index]))  #.convert('RGB') (DESS: 294>286) (PAIN: 224>286)
-        #print(np.array(a).shape)
         b = Image.open(join(self.b_path, self.image[index]))  #.convert('RGB')
-        a = a.resize((286, 286), Image.BICUBIC)  # 444 > 286
-        #print(np.array(a).shape)
-        b = b.resize((286, 286), Image.BICUBIC)
+        if self.resize != 0:
+            a = a.resize((self.resize, self.resize), Image.BICUBIC)  # 444 > 286
+            b = b.resize((self.resize, self.resize), Image.BICUBIC)
         a = transforms.ToTensor()(np.array(a))
         b = transforms.ToTensor()(np.array(b))
         a = a.type(torch.float32)
         b = b.type(torch.float32)
         a = a / a.max()
         b = b / b.max()
-        if 1:  # random crop
-            #a = torch.nn.functional.interpolate(a.unsqueeze(0), (286, 286), mode='bicubic', align_corners=True)[0, ::]
-            #b = torch.nn.functional.interpolate(b.unsqueeze(0), (286, 286), mode='bicubic', align_corners=True)[0, ::]
-            if self.mode == 'train':
-                w_offset = random.randint(0, max(0, 286 - 256 - 1))
-                h_offset = random.randint(0, max(0, 286 - 256 - 1))
-            elif self.mode == 'test':
-                w_offset = 15
-                h_offset = 15
-            a = a[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
-            b = b[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
+
+        # random crop
+        osize = a.shape[2]
+        if self.mode == 'train':
+            w_offset = random.randint(0, max(0, osize - 256 - 1))
+            h_offset = random.randint(0, max(0, osize - 256 - 1))
+        elif self.mode == 'test':
+            w_offset = 15
+            h_offset = 15
+        a = a[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
+        b = b[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
 
         if a.shape[0] != 3:
             a = torch.cat([a] * 3, 0)
             b = torch.cat([b] * 3, 0)
         a = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(a)
         b = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(b)
-        #print(a.shape)
 
         if self.opt.flip:
             if self.mode == 'train':  # flipping
@@ -140,7 +135,3 @@ class DatasetFromFolder(data.Dataset):
                     b = b.index_select(2, idx)
 
         return a, b
-
-
-if __name__ == '__main__':
-    ds = get_training_set('/media/ghc/GHc_data1/paired_images/TSE_DESS/', direction='a_b', mode='train')

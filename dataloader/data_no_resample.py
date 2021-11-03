@@ -92,16 +92,11 @@ class DatasetFromFolder(data.Dataset):
         self.b_path = join(image_dir, self.opt.direction.split('_')[1])
         self.image = sorted([x.split('/')[-1] for x in glob.glob(self.a_path+'/*')])
 
-        #transform_list = [transforms.ToTensor(),
-        #                  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-        #self.transform = transforms.Compose(transform_list)
-
     def __len__(self):
         return len(self.image)
 
     def __getitem__(self, index):
         a = Image.open(join(self.a_path, self.image[index]))  #.convert('RGB') (DESS: 294>294) (PAIN: 224>286)
-        #print(np.array(a).shape)
         b = Image.open(join(self.b_path, self.image[index]))  #.convert('RGB')
         a = transforms.ToTensor()(np.array(a))
         b = transforms.ToTensor()(np.array(b))
@@ -115,20 +110,17 @@ class DatasetFromFolder(data.Dataset):
         if self.mode == 'train':
             w_offset = random.randint(0, max(0, osize - 256 - 1))
             h_offset = random.randint(0, max(0, osize - 256 - 1))
-            a = a[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
-            b = b[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
         elif self.mode == 'test':
             w_offset = 15
             h_offset = 15
-            print(a.shape)
-            print(b.shape)
+        a = a[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
+        b = b[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
 
         if a.shape[0] != 3:
             a = torch.cat([a] * 3, 0)
             b = torch.cat([b] * 3, 0)
         a = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(a)
         b = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(b)
-        #print(a.shape)
 
         if self.opt.flip:
             if self.mode == 'train':  # flipping
@@ -139,7 +131,3 @@ class DatasetFromFolder(data.Dataset):
                     b = b.index_select(2, idx)
 
         return a, b
-
-
-if __name__ == '__main__':
-    ds = get_training_set('/media/ghc/GHc_data1/paired_images/TSE_DESS/', direction='a_b', mode='train')
