@@ -52,15 +52,16 @@ def overlap_red2(x0, y0, channel):
 
 # Testing settings
 parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
-parser.add_argument('--dataset', default='painfull', help='name of training dataset')
-parser.add_argument('--testset', default='pain', help='name of testing dataset if different than the training dataset')
-parser.add_argument('--prj', type=str, default='bysubjectSeg20', help='name of the project')
+parser.add_argument('--dataset', default='TSE_DESS', help='name of training dataset')
+parser.add_argument('--testset', default='TSE_DESS', help='name of testing dataset if different than the training dataset')
+parser.add_argument('--prj', type=str, default='NoResampleResnet9', help='name of the project')
 parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
 parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
 parser.add_argument('--crop', type=int, default=0)
-parser.add_argument('--nepochs', nargs='+', default=[100, 120, 20], help='which checkpoints to be interfered with')
+parser.add_argument('--nepochs', nargs='+', default=[0, 601, 20], help='which checkpoints to be interfered with')
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
+parser.add_argument('--att', action='store_true', dest='att', default=False)
 parser.add_argument('--cycle', action='store_true', dest='cycle', default=False)
 parser.add_argument('--t2d', action='store_true', dest='t2d', default=True)
 
@@ -74,7 +75,7 @@ class Pix2PixModel:
     def __init__(self, opt):
         self.opt = opt
         self.dir_checkpoints = os.environ.get('CHECKPOINTS')
-        from dataloader.data import DatasetFromFolder as Dataset
+        from dataloader.data_no_resample import DatasetFromFolder as Dataset
 
         if opt.testset:
             self.test_set = Dataset(os.environ.get('DATASET') + opt.testset + '/test/', opt, mode='test')
@@ -106,7 +107,10 @@ class Pix2PixModel:
             net_g = get_model(epoch, 'netG_ab', self.dir_checkpoints, self.device)
         output = net_g(input)
         out = output[0][0, ::].detach().cpu()
-        return img, mask, out
+        if self.opt.att:
+            return img, mask, out, output[1][0, ::].detach().cpu()
+        else:
+            return img, mask, out
 
     def get_t2d(self, ori):
         t2d = self.netg_t2d(ori.cuda().unsqueeze(0))[0][0, ::].detach().cpu()
@@ -119,40 +123,46 @@ class Pix2PixModel:
 
 
 test_unit = Pix2PixModel(opt=opt)
-irange = [15, 19, 34, 79, 95, 109, 172, 173, 208, 249, 266]
+irange = list(np.random.randint(0, 250, 10))#[15, 19, 34, 79, 95, 109, 172, 173, 208, 249, 266]
 
-epoch = opt.nepochs[0]
+for epoch in opt.nepochs:
+    outputs = list(map(lambda v: test_unit.get_one_output(v), irange))  # (3, 256, 256) (-1, 1)
+    list_ori = list(zip(*outputs))  # (3, 256, 256) (-1, 1)
+    list_ori_norm = list(map(lambda k: list(map(lambda v: norm_01(v), k)), list_ori[:3]))  # (3, 256, 256) (0, 1)
+    list_t2d = list(map(lambda k: list(map(lambda v: test_unit.get_t2d(v), k)), list_ori[:3]))  # (3, 256, 256) (-1, 1)
+    list_t2d_norm = list(map(lambda k: list(map(lambda v: norm_01(v), k)), list_t2d))  # (3, 256, 256) (0, 1)
+    list_seg = list(map(lambda k: list(map(lambda v: test_unit.get_seg(v), k)), list_t2d_norm))
 
-outputs = list(map(lambda v: test_unit.get_one_output(v), irange))
-list_ori = list(zip(*outputs))
-list_ori_norm = list(map(lambda k: list(map(lambda v: norm_01(v), k)), list_ori))
-list_t2d = list(map(lambda k: list(map(lambda v: test_unit.get_t2d(v), k)), list_ori))
-list_t2d_norm = list(map(lambda k: list(map(lambda v: norm_01(v), k)), list_t2d))
-list_seg = list(map(lambda k: list(map(lambda v: test_unit.get_seg(v), k)), list_t2d_norm))
+    #list_diff = [x[1] - x[0] for x in list(zip(list_ori[2], list_ori[1]))]
+    list_diff = [torch.abs(torch.div(x[1] - x[0], x[0])) for x in list(zip(list_ori[1], list_ori[2]))]
+    for i in range(len(list_diff)):
+        diff = list_diff[i]
+        diff[diff >= 1] = 1
+        list_diff[i] = diff
 
-list_diff = [x[1] - x[0] for x in list(zip(list_ori[2], list_ori[0]))]
-for i in range(len(list_diff)):
-    diff = list_diff[i]
-    diff[diff <= 0] = 0
-    list_diff[i] = diff
+    to_show = [list_ori[0],
+               list(map(lambda x, y: overlap_red(x, y), list_ori_norm[0], list_seg[0])),
+               list_ori[1],
+               list(map(lambda x, y: overlap_red(x, y), list_ori_norm[1], list_seg[1])),
+               list_ori[2],
+               list(map(lambda x, y: overlap_red(x, y), list_ori_norm[2], list_seg[2])),
+               list_diff,
+               list(map(lambda x, y: overlap_red(x, y), list_diff, list_seg[2]))
+               ]
 
-to_show = [list_ori[0],
-           list(map(lambda x, y: overlap_red(x, y), list_ori_norm[0], list_seg[0])),
-           list_ori[1],
-           list(map(lambda x, y: overlap_red(x, y), list_ori_norm[1], list_seg[1])),
-           list_ori[2],
-           list(map(lambda x, y: overlap_red(x, y), list_ori_norm[2], list_seg[2])),
-           list_diff
-           ]
+    if opt.att:
+        to_show = to_show + [list_ori[3]]
 
-to_show = [torch.cat(x, 2) for x in to_show]
-to_show = [x - x.min() for x in to_show]
+    to_show = [torch.cat(x, 2) for x in to_show]
+    to_show = [x - x.min() for x in to_show]
 
-imagesc(np.concatenate([x / x.max() for x in to_show], 1), show=False, save='temp.png')
+    imagesc(np.concatenate([x / x.max() for x in to_show], 1), show=False,
+            save=os.path.join("result", opt.prj, str(epoch) + '.jpg'))
+
 
 
 # USAGE
 # CUDA_VISIBLE_DEVICES=3 python test.py --dataset pain --nepochs 0 601 20 --prj cycle_eff_check --direction a_b --cycle
 # CUDA_VISIBLE_DEVICES=1 python test.py --dataset pain --nepochs 0 601 20 --prj wseg1000 --direction a_b
 # CUDA_VISIBLE_DEVICES=3 python test.py --dataset TSE_DESS --nepochs 0 601 20 --prj up256patchgan --direction a_b
-# CUDA_VISIBLE_DEVICES=2 python test.py --dataset TSE_DESS --nepochs 0 601 20 --prj TrySeg100cartilage --direction a_b
+# CUDA_VISIBLE_DEVICES=0 python test_new.py --dataset TSE_DESS --nepochs 0 601 20 --prj NoResampleResnet9 --direction a_b

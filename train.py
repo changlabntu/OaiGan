@@ -16,7 +16,7 @@ parser.add_argument('--flip', action='store_true', dest='flip', default=False, h
 # Model
 parser.add_argument('--gan_mode', type=str, default='vanilla', help='gan mode')
 parser.add_argument('--netG', type=str, default='unet_256', help='netG model')
-parser.add_argument('--netD', type=str, default='patchgan', help='netD model')
+parser.add_argument('--netD', type=str, default='patchgan_16', help='netD model')
 parser.add_argument('--input_nc', type=int, default=3, help='input image channels')
 parser.add_argument('--output_nc', type=int, default=3, help='output image channels')
 parser.add_argument('--ngf', type=int, default=64, help='generator filters in first conv layer')
@@ -51,7 +51,7 @@ print(opt)
 if opt.bysubject:
     from dataloader.data import DatasetFromFolderSubjects as Dataset
 else:
-    from dataloader.data import DatasetFromFolder as Dataset
+    from dataloader.data_no_resample import DatasetFromFolder as Dataset
 
 train_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/train/', opt, mode='train')
 test_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/test/', opt, mode='test')
@@ -87,10 +87,10 @@ else:
     net.module.overall_loop()
 
 # USAGE
-# CUDA_VISIBLE_DEVICES=1 python train.py --dataset TSE_DESS -b 16 --prj TrySeg --direction a_b_bseg
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset TSE_DESS -b 16 --prj NoResampleResnet6 --direction a_b --netG resnet_6blocks
 # CUDA_VISIBLE_DEVICES=2 python train.py --dataset painfull -b 23 --prj patch16 --lseg 0 --direction aregis1_b
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 1 --prj bysubject --lseg 0 --direction aregis1_b --bysubject
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj check --lseg 0 --direction aregis1_b
-# CUDA_VISIBLE_DEVICES=0 python train.py --dataset pain -b 16 --prj Attv1_0 --lseg 0 --direction aregis1_b --netG Attv1_0
+# CUDA_VISIBLE_DEVICES=0 python train.py --dataset pain -b 16 --prj Attv1_2 --lseg 0 --direction aregis1_b --netG Attv1_2
 
-# CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj AttUNet0 --lseg 0 --direction aregis1_b --netG AttUNet
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj AttUNet_patch4 --lseg 0 --direction aregis1_b --netG AttUNet --netD patchgan_4

@@ -58,7 +58,7 @@ class Generator(nn.Module):
             attention_mask = F.sigmoid(output[:, :1])
             attention_mask = attention_mask.repeat(1, 3, 1, 1)
             result = content_mask * attention_mask + input * (1 - attention_mask)
-        if self.netG == 'Attv1_1':
+        if self.netG == 'Attv1_2':
             output = self.encoder(input)
             output = self.decoder(output)
             content_mask = output[:, 1:]

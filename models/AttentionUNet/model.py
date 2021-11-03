@@ -24,10 +24,15 @@ class Attention_block(nn.Module):
 
         self.relu = nn.ReLU(inplace=True)
 
+        self.softmax = True
+
     def forward(self, g, x):
         g1 = self.W_g(g)
         x1 = self.W_x(x)
-        psi = self.relu(g1 + x1)
+        if hasattr(self, 'softmax'):
+            psi = nn.Softmax(dim=1)(g1 + x1)
+        else:
+            psi = self.relu(g1 + x1)
         psi = self.psi(psi)
 
         return x * psi, psi
@@ -99,6 +104,9 @@ class AttU_Net(nn.Module):
         self.Conv_1x1 = nn.Conv2d(filters[0], n_classes, kernel_size=1, stride=1, padding=0)
 
     def forward(self, x):
+        if not hasattr(self, 'use_attention'):
+            self.use_attention = (True, True, True, True)
+
         # encoding path
         x1 = self.Conv1(x)
 
@@ -150,8 +158,7 @@ class AttU_Net(nn.Module):
         d2 = self.Up_conv2(d2)
 
         d1 = self.Conv_1x1(d2)
-
-        return d1, psi_all
+        return d1, nn.Upsample(size=(d1.shape[2], d1.shape[3]))(torch.cat([psi_all[-1]]*3, 1))
 
 
 if __name__ == '__main__':

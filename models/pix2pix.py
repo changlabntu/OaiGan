@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from .networks import define_G, define_D
+from models.networks import define_G, define_D
 from models.networks import get_scheduler
 from models.loss import GANLoss
 from math import log10
@@ -10,11 +10,14 @@ import pytorch_lightning as pl
 from utils.metrics_segmentation import SegmentationCrossEntropyLoss
 
 
+
+
 def _weights_init(m):
     if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
         torch.nn.init.normal_(m.weight, 0.0, 0.02)
     if isinstance(m, nn.BatchNorm2d):
         torch.nn.init.normal_(m.weight, 0.0, 0.02)
+        torch.nn.init.constant_(m.bias, 0)
         torch.nn.init.constant_(m.bias, 0)
 
 
@@ -35,34 +38,34 @@ class Pix2PixModel(pl.LightningModule):
         self.train_loader = train_loader
         self.test_loader = test_loader
 
-        # generator and discriminator model
+        # Generator
         if (hparams.netG).startswith('Attv1'):
-            from models.AttentionGANv1.mymodel import Generator, Discriminator
+            from models.AttentionGANv1.mymodel import Generator
             # plus one because the first channel is for attention mask
             self.net_g = Generator(hparams.netG, input_nc=hparams.input_nc, output_nc=hparams.output_nc+1, ngf=64,
                                    norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6)
-            self.net_d = Discriminator()
-
         # AttUNet
         elif hparams.netG == 'AttUNet':
             from models.AttentionUNet.model import AttU_Net
             hparams.use_attention = [False, False, False, True]
             self.net_g = AttU_Net(n_channels=hparams.input_nc, n_classes=hparams.output_nc,
                                   scale_factor=1, use_attention=hparams.use_attention)
-
         else:
             # original
             self.net_g = define_G(input_nc=hparams.input_nc, output_nc=hparams.output_nc, ngf=64, netG=hparams.netG,
                                   norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[])
-            if (hparams.netD).startswith('patchgan'):
-                from models.cyclegan.models import Discriminator
-                self.net_d = Discriminator(input_shape=(6, 256, 256), patch=(hparams.netD).split('_')[-1])
-            else:
-                self.net_d = define_D(input_nc=hparams.output_nc * 2, ndf=64, netD=hparams.netD)
+        # Discriminator
+        if (hparams.netD).startswith('patchgan'):
+            from models.cyclegan.models import Discriminator
+            self.net_d = Discriminator(input_shape=(6, 256, 256), patch=(hparams.netD).split('_')[-1])
+        else:
+            self.net_d = define_D(input_nc=hparams.output_nc * 2, ndf=64, netD=hparams.netD)
 
         self.net_g = self.net_g.apply(_weights_init)
         self.net_d = self.net_d.apply(_weights_init)
-        self.seg_model = torch.load(os.environ.get('model_seg')).cuda()
+
+        if self.hparams.lseg > 0:
+            self.seg_model = torch.load(os.environ.get('model_seg')).cuda()
 
         [self.optimizer_d, self.optimizer_g], [] = self.configure_optimizers()
         self.net_g_scheduler = get_scheduler(self.optimizer_g, hparams)

@@ -100,29 +100,28 @@ class DatasetFromFolder(data.Dataset):
         return len(self.image)
 
     def __getitem__(self, index):
-        a = Image.open(join(self.a_path, self.image[index]))  #.convert('RGB') (DESS: 294>286) (PAIN: 224>286)
+        a = Image.open(join(self.a_path, self.image[index]))  #.convert('RGB') (DESS: 294>294) (PAIN: 224>286)
         #print(np.array(a).shape)
         b = Image.open(join(self.b_path, self.image[index]))  #.convert('RGB')
-        a = a.resize((286, 286), Image.BICUBIC)  # 444 > 286
-        #print(np.array(a).shape)
-        b = b.resize((286, 286), Image.BICUBIC)
         a = transforms.ToTensor()(np.array(a))
         b = transforms.ToTensor()(np.array(b))
         a = a.type(torch.float32)
         b = b.type(torch.float32)
         a = a / a.max()
         b = b / b.max()
-        if 1:  # random crop
-            #a = torch.nn.functional.interpolate(a.unsqueeze(0), (286, 286), mode='bicubic', align_corners=True)[0, ::]
-            #b = torch.nn.functional.interpolate(b.unsqueeze(0), (286, 286), mode='bicubic', align_corners=True)[0, ::]
-            if self.mode == 'train':
-                w_offset = random.randint(0, max(0, 286 - 256 - 1))
-                h_offset = random.randint(0, max(0, 286 - 256 - 1))
-            elif self.mode == 'test':
-                w_offset = 15
-                h_offset = 15
+
+        # random crop
+        osize = a.shape[2]
+        if self.mode == 'train':
+            w_offset = random.randint(0, max(0, osize - 256 - 1))
+            h_offset = random.randint(0, max(0, osize - 256 - 1))
             a = a[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
             b = b[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
+        elif self.mode == 'test':
+            w_offset = 15
+            h_offset = 15
+            print(a.shape)
+            print(b.shape)
 
         if a.shape[0] != 3:
             a = torch.cat([a] * 3, 0)
