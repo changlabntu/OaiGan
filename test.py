@@ -74,7 +74,6 @@ class Pix2PixModel:
 
     def get_one_output(self, i):
         opt = self.opt
-        print(i)
         x = self.test_set.__getitem__(i)
         img = x[0]
         mask = x[1]
@@ -170,6 +169,6 @@ for epoch in opt.nepochs:
 # CUDA_VISIBLE_DEVICES=1 python test.py --dataset pain --nepochs 0 601 20 --prj wseg1000 --direction a_b
 # CUDA_VISIBLE_DEVICES=3 python test.py --dataset TSE_DESS --nepochs 0 601 20 --prj up256patchgan --direction a_b
 
-# CUDA_VISIBLE_DEVICES=0 python test.py --dataset pain --nepochs 0 601 20 --prj wSeg20 --direction a_b --ressize 286
+# CUDA_VISIBLE_DEVICES=0 python test.py --dataset pain --nepochs 0 601 20 --prj wSeg20 --direction a_b --resize 286
 
 # CUDA_VISIBLE_DEVICES=0 python test.py --dataset TSE_DESS --nepochs 0 601 20 --prj NoResampleResnet9 --direction a_b --ressize 0

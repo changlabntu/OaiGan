@@ -13,6 +13,7 @@ parser.add_argument('--bysubject', action='store_true', dest='bysubject', defaul
 parser.add_argument('--prj', type=str, default='', help='name of the project')
 parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
 parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
+parser.add_argument('--resize', type=int, default=0)
 # Model
 parser.add_argument('--gan_mode', type=str, default='vanilla', help='gan mode')
 parser.add_argument('--netG', type=str, default='unet_256', help='netG model')
@@ -26,7 +27,7 @@ parser.add_argument('-b', dest='batch_size', type=int, default=1, help='training
 parser.add_argument('--test_batch_size', type=int, default=1, help='testing batch size')
 parser.add_argument('--epoch_count', type=int, default=0, help='the starting epoch count')
 parser.add_argument('--epoch_load', type=int, default=0, help='to load checkpoint form the epoch count')
-parser.add_argument('--n_epochs', type=int, default=300+1, help='# of iter at starting learning rate')
+parser.add_argument('--n_epochs', type=int, default=101, help='# of iter at starting learning rate')
 parser.add_argument('--n_epochs_decay', type=int, default=100, help='# of iter to linearly decay learning rate to zero')
 parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate f -or adam')
 parser.add_argument('--lr_policy', type=str, default='lambda', help='learning rate policy: lambda|step|plateau|cosine')
@@ -35,6 +36,7 @@ parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. de
 parser.add_argument('--threads', type=int, default=4, help='number of threads for data loader to use')
 parser.add_argument('--seed', type=int, default=123, help='random seed to use. Default=123')
 parser.add_argument('--lamb', type=int, default=100, help='weight on L1 term in objective')
+parser.add_argument('--lamb_b', type=int, default=100, help='weight on L1 term in objective')
 parser.add_argument('--lseg', type=int, default=0, help='weight on segmentation loss in objective')
 parser.add_argument('--legacy', action='store_true', dest='legacy', default=False, help='legacy pytorch')
 parser.add_argument('--mode', type=str, default='dummy')
@@ -51,7 +53,7 @@ print(opt)
 if opt.bysubject:
     from dataloader.data import DatasetFromFolderSubjects as Dataset
 else:
-    from dataloader.data_no_resample import DatasetFromFolder as Dataset
+    from notinuse.data_no_resample import DatasetFromFolder as Dataset
 
 train_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/train/', opt, mode='train')
 test_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/test/', opt, mode='test')
@@ -94,3 +96,5 @@ else:
 # CUDA_VISIBLE_DEVICES=0 python train.py --dataset pain -b 16 --prj Attv1_2 --lseg 0 --direction aregis1_b --netG Attv1_2
 
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj AttUNet_patch4 --lseg 0 --direction aregis1_b --netG AttUNet --netD patchgan_4
+
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 1 --prj bysubjecttest --lseg 0 --direction aregis1_b --bysubject --resize 286

@@ -10,6 +10,8 @@ import pytorch_lightning as pl
 from utils.metrics_segmentation import SegmentationCrossEntropyLoss
 
 
+
+
 def _weights_init(m):
     if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
         torch.nn.init.normal_(m.weight, 0.0, 0.02)
@@ -36,9 +38,22 @@ class Pix2PixModel(pl.LightningModule):
         self.train_loader = train_loader
         self.test_loader = test_loader
 
-        # original
-        self.net_g = define_G(input_nc=hparams.input_nc, output_nc=hparams.output_nc, ngf=64, netG=hparams.netG,
-                              norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[])
+        # Generator
+        if (hparams.netG).startswith('Attv1'):
+            from models.AttentionGANv1.mymodel import Generator
+            # plus one because the first channel is for attention mask
+            self.net_g = Generator(hparams.netG, input_nc=hparams.input_nc, output_nc=hparams.output_nc+1, ngf=64,
+                                   norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6)
+        # AttUNet
+        elif hparams.netG == 'AttUNet':
+            from models.AttentionUNet.model import AttU_Net
+            hparams.use_attention = [False, False, False, True]
+            self.net_g = AttU_Net(n_channels=hparams.input_nc, n_classes=hparams.output_nc,
+                                  scale_factor=1, use_attention=hparams.use_attention)
+        else:
+            # original
+            self.net_g = define_G(input_nc=hparams.input_nc, output_nc=hparams.output_nc, ngf=64, netG=hparams.netG,
+                                  norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[])
         # Discriminator
         if (hparams.netD).startswith('patchgan'):
             from models.cyclegan.models import Discriminator
@@ -91,16 +106,34 @@ class Pix2PixModel(pl.LightningModule):
         # calculate reconstruction loss
         recon_loss = self.criterionL1(fake_images, real_images)
         loss_g = adversarial_loss + self.hparams.lamb * recon_loss
-        self.log('loss_recon_a', self.hparams.lamb * recon_loss, on_step=False, on_epoch=True,
-                 prog_bar=True, logger=True, sync_dist=True)
+
+        if self.hparams.lseg > 0:
+            #fake_images_b = self.net_g(real_images)
+            new_seg = fake_images
+            old_seg = conditioned_images
+
+            # segmentation loss
+            prob = self.seg_model(new_seg)[0]   # (16, 3, 256, 256)
+            if 0: # use the segmented dess mask (bone only)
+                seg_images = inputs[2]
+                seg = seg_images.type(torch.LongTensor).cuda()
+            elif 0: # use the segment model for dess
+                seg = self.seg_model(real_images)[0]
+                seg = torch.argmax(seg, 1)
+            elif 1:
+                seg = self.seg_model(old_seg)[0]
+                seg = torch.argmax(seg, 1)
+            loss_seg, _ = self.segLoss((prob, ), (seg, ))
+            self.log('loss_seg', loss_seg, on_step=False, on_epoch=True,
+                     prog_bar=True, logger=True, sync_dist=True)
+
+            loss_g = loss_g + loss_seg * self.hparams.lseg
 
         # target domain identity loss
-        fake_images_b = self.net_g(real_images)[0]
-        #recon_loss_b = nn.MSELoss()(fake_images_b, real_images)
-        recon_loss_b = self.criterionL1(fake_images_b, real_images)
-        loss_g = loss_g + self.hparams.lamb_b * recon_loss_b
-        self.log('loss_recon_b', self.hparams.lamb_b * recon_loss_b, on_step=False, on_epoch=True,
-                 prog_bar=True, logger=True, sync_dist=True)
+        if 0:
+            recon_loss_b = nn.MSELoss()(fake_images_b, real_images)
+            #recon_loss_b = self.criterionL1(fake_images_b, real_images)
+            loss_g = loss_g + adversarial_loss + 1 * self.hparams.lamb * recon_loss_b
 
         return loss_g
 
