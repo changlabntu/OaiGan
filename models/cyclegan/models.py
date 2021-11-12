@@ -120,6 +120,6 @@ class Discriminator(nn.Module):
         )
 
     def forward(self, img):
-        return self.model(img)
+        return self.model(img),
 
 

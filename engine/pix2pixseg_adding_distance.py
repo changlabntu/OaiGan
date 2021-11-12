@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from .networks import define_G, define_D
+from models.networks import define_G, define_D
 from models.networks import get_scheduler
 from models.loss import GANLoss
 from math import log10

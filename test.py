@@ -113,7 +113,7 @@ parser.add_argument('--nepochs', nargs='+', default=[0, 601, 20], help='which ch
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
 parser.add_argument('--att', action='store_true', dest='att', default=False)
-parser.add_argument('--cycle', action='store_true', dest='cycle', default=False)
+parser.add_argument('-board-cycle', action='store_true', dest='cycle', default=False)
 parser.add_argument('--t2d', action='store_true', dest='t2d', default=True)
 
 opt = parser.parse_args()
@@ -169,6 +169,6 @@ for epoch in opt.nepochs:
 # CUDA_VISIBLE_DEVICES=1 python test.py --dataset pain --nepochs 0 601 20 --prj wseg1000 --direction a_b
 # CUDA_VISIBLE_DEVICES=3 python test.py --dataset TSE_DESS --nepochs 0 601 20 --prj up256patchgan --direction a_b
 
-# CUDA_VISIBLE_DEVICES=0 python test.py --dataset pain --nepochs 0 601 20 --prj wSeg20 --direction a_b --resize 286
+# CUDA_VISIBLE_DEVICES=0 python test.py --dataset pain --nepochs 0 601 20 --prj bysubjectwgan --direction a_b --resize 286
 
 # CUDA_VISIBLE_DEVICES=0 python test.py --dataset TSE_DESS --nepochs 0 601 20 --prj NoResampleResnet9 --direction a_b --ressize 0

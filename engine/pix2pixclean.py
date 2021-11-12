@@ -43,6 +43,10 @@ class Pix2PixModel(pl.LightningModule):
         if (hparams.netD).startswith('patchgan'):
             from models.cyclegan.models import Discriminator
             self.net_d = Discriminator(input_shape=(6, 256, 256), patch=(hparams.netD).split('_')[-1])
+        elif hparams.netD == 'acgan':
+            from models.acgan import Discriminator
+            print('use acgan discriminator')
+            self.net_d = Discriminator(img_shape=(6, 256, 256), n_classes=2)
         else:
             self.net_d = define_D(input_nc=hparams.output_nc * 2, ndf=64, netD=hparams.netD)
 
@@ -85,7 +89,10 @@ class Pix2PixModel(pl.LightningModule):
 
         gout = self.net_g(conditioned_images)
         fake_images = gout[0]
-        disc_logits = self.net_d(torch.cat((fake_images, conditioned_images), 1))
+        dout = self.net_d(torch.cat((fake_images, conditioned_images), 1))
+        #print(dout[0].shape)
+        #print(dout[1].shape)
+        disc_logits = dout[0]
         adversarial_loss = self.criterionGAN(disc_logits, torch.ones_like(disc_logits))
 
         # calculate reconstruction loss
@@ -114,8 +121,10 @@ class Pix2PixModel(pl.LightningModule):
         gout = self.net_g(conditioned_images)
         fake_images = gout[0].detach()
 
-        fake_logits = self.net_d(torch.cat((fake_images, conditioned_images), 1))
-        real_logits = self.net_d(torch.cat((real_images, conditioned_images), 1))
+        dout_fake = self.net_d(torch.cat((fake_images, conditioned_images), 1))
+        fake_logits = dout_fake[0]
+        dout_real = self.net_d(torch.cat((real_images, conditioned_images), 1))
+        real_logits = dout_real[0]
 
         fake_loss = self.criterionGAN(fake_logits, torch.zeros_like(fake_logits))
         real_loss = self.criterionGAN(real_logits, torch.ones_like(real_logits))

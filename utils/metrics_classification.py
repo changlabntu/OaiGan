@@ -4,6 +4,7 @@ import numpy as np
 from sklearn import metrics
 from torch.nn import functional as F
 
+
 class CrossEntropyLoss(nn.Module):
     """Dice loss of binary class
     Args:

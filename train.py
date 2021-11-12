@@ -7,10 +7,11 @@ from dotenv import load_dotenv
 load_dotenv('.env')
 
 parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
+# Project name
+parser.add_argument('--prj', type=str, default='', help='name of the project')
 # Data
 parser.add_argument('--dataset', type=str, default='pain')
 parser.add_argument('--bysubject', action='store_true', dest='bysubject', default=False)
-parser.add_argument('--prj', type=str, default='', help='name of the project')
 parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
 parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
 parser.add_argument('--resize', type=int, default=0)
@@ -36,13 +37,17 @@ parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. de
 parser.add_argument('--threads', type=int, default=4, help='number of threads for data loader to use')
 parser.add_argument('--seed', type=int, default=123, help='random seed to use. Default=123')
 parser.add_argument('--lamb', type=int, default=100, help='weight on L1 term in objective')
-parser.add_argument('--lamb_b', type=int, default=100, help='weight on L1 term in objective')
+parser.add_argument('--lamb_b', type=int, default=0, help='weight on L1 term in objective')
 parser.add_argument('--lseg', type=int, default=0, help='weight on segmentation loss in objective')
+# misc
 parser.add_argument('--legacy', action='store_true', dest='legacy', default=False, help='legacy pytorch')
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
 opt = parser.parse_args()
 opt.prj = opt.dataset + '_' + opt.prj
+
+opt.not_tracking_hparams = ['mode', 'port', 'epoch_load', 'legacy', 'threads', 'test_batch_size']
+
 print(opt)
 
 #cudnn.benchmark = True
@@ -66,14 +71,10 @@ test_loader = DataLoader(dataset=test_set, num_workers=opt.threads, batch_size=o
 
 #  Model
 if not opt.legacy:
-    from models.pix2pix import Pix2PixModel
+    from engine.pix2pix import Pix2PixModel
     import pytorch_lightning as pl
     from pytorch_lightning import loggers as pl_loggers
     logger = pl_loggers.TensorBoardLogger(os.environ.get('LOGS'))
-    #from pytorch_lightning.loggers.neptune import NeptuneLogger
-    #logger = NeptuneLogger(
-    #    api_key=os.environ.get('NEPTUNE_API_TOKEN'),
-    #    project_name="ntuchanglab/lightning-pix2pix",)
     net = Pix2PixModel(hparams=opt, train_loader=None,
                        test_loader=None, checkpoints=os.environ.get('CHECKPOINTS'))
     print(net.hparams)
@@ -81,7 +82,7 @@ if not opt.legacy:
                          max_epochs=opt.n_epochs, progress_bar_refresh_rate=20, logger=logger)
     trainer.fit(net, train_loader, test_loader)
 else:
-    from models.pix2pix import Pix2PixModel
+    from engine.pix2pix import Pix2PixModel
     net = Pix2PixModel(hparams=opt, train_loader=train_loader,
                        test_loader=test_loader, checkpoints=os.environ.get('CHECKPOINTS'))
     net = net.cuda()
@@ -90,11 +91,13 @@ else:
 
 # USAGE
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset TSE_DESS -b 16 --prj NoResampleResnet6 --direction a_b --netG resnet_6blocks
-# CUDA_VISIBLE_DEVICES=2 python train.py --dataset painfull -b 23 --prj patch16 --lseg 0 --direction aregis1_b
+# CUDA_VISIBLE_DEVICES=0 python train.py --dataset painfull -b 23 --prj patch16 --lseg 0 --direction aregis1_b
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 1 --prj bysubject --lseg 0 --direction aregis1_b --bysubject
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj check --lseg 0 --direction aregis1_b
 # CUDA_VISIBLE_DEVICES=0 python train.py --dataset pain -b 16 --prj Attv1_2 --lseg 0 --direction aregis1_b --netG Attv1_2
 
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj AttUNet_patch4 --lseg 0 --direction aregis1_b --netG AttUNet --netD patchgan_4
 
-# CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 1 --prj bysubjecttest --lseg 0 --direction aregis1_b --bysubject --resize 286
+# CUDA_VISIBLE_DEVICES=0 python train.py --dataset pain -b 1 --prj bysubjectwgan --direction aregis1_b --bysubject --resize 286  --gan_mode wgangp --lr 0.002
+#
+# --netG resnet_6blocks
