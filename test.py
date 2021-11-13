@@ -84,7 +84,8 @@ class Pix2PixModel:
             net_g = get_model(epoch, 'netG', self.dir_checkpoints, self.device)
         else:
             net_g = get_model(epoch, 'netG_ab', self.dir_checkpoints, self.device)
-        output = net_g(input)
+        output = net_g(input, 0*torch.ones(1, 1).cuda())
+        #output = net_g(input)
         out = output[0][0, ::].detach().cpu()
         if self.opt.att:
             return img, mask, out, output[1][0, ::].detach().cpu()
@@ -172,3 +173,6 @@ for epoch in opt.nepochs:
 # CUDA_VISIBLE_DEVICES=0 python test.py --dataset pain --nepochs 0 601 20 --prj bysubjectwgan --direction a_b --resize 286
 
 # CUDA_VISIBLE_DEVICES=0 python test.py --dataset TSE_DESS --nepochs 0 601 20 --prj NoResampleResnet9 --direction a_b --ressize 0
+
+
+# CUDA_VISIBLE_DEVICES=0 python test.py --dataset painfull --nepochs 0 601 10 --prj b6DattganDG01--direction a_b --resize 286

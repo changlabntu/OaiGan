@@ -98,6 +98,10 @@ else:
 
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj AttUNet_patch4 --lseg 0 --direction aregis1_b --netG AttUNet --netD patchgan_4
 
-# CUDA_VISIBLE_DEVICES=0 python train.py --dataset pain -b 1 --prj bysubjectwgan --direction aregis1_b --bysubject --resize 286  --gan_mode wgangp --lr 0.002
-#
-# --netG resnet_6blocks
+# CUDA_VISIBLE_DEVICES=0 python train.py --dataset pain -b 1 --prj bysubjectattgan --direction aregis1_b --bysubject --resize 286
+
+
+
+#CUDA_VISIBLE_DEVICES=1 python train.py --dataset painfull -b 3 --prj attganL1XX1advXX1advX1 --direction aregis1_b --bysubject --resize 286 --netG attgan
+
+#CUDA_VISIBLE_DEVICES=1 python train.py --dataset painfull -b 6 --prj atttest --direction aregis1_b --bysubject --resize 286
