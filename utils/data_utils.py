@@ -2,6 +2,19 @@ import torch
 import numpy as np
 from PIL import Image
 
+def print_num_of_parameters(net):
+    model_parameters = filter(lambda p: p.requires_grad, net.parameters())
+    print('Number of parameters: ' + str(sum([np.prod(p.size()) for p in model_parameters])))
+
+
+def norm_01(x):
+    """
+    normalize to 0 - 1
+    """
+    x = x - x.min()
+    x = x / x.max()
+    return x
+
 
 def to_8bit(x):
     if type(x) == torch.Tensor:

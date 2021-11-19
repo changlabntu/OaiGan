@@ -10,7 +10,8 @@ import torchvision.transforms as transforms
 from dataloader.utils import is_image_file
 from PIL import Image
 import numpy as np
-
+import os
+from utils.data_utils import norm_01
 
 def to_8bit(x):
     if type(x) == torch.Tensor:
@@ -92,6 +93,7 @@ class DatasetFromFolder(data.Dataset):
         self.b_path = join(image_dir, self.opt.direction.split('_')[1])
         self.image = sorted([x.split('/')[-1] for x in glob.glob(self.a_path+'/*')])
         self.resize = opt.resize
+        self.seg_model = torch.load(os.environ.get('model_seg')).cuda()
 
     def __len__(self):
         return len(self.image)
@@ -135,3 +137,32 @@ class DatasetFromFolder(data.Dataset):
                     b = b.index_select(2, idx)
 
         return a, b
+
+
+if __name__ == '__main__':
+    from dotenv import load_dotenv
+    import argparse
+    load_dotenv('.env')
+
+    parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
+    # Data
+    parser.add_argument('--dataset', type=str, default='painfull')
+    parser.add_argument('--bysubject', action='store_true', dest='bysubject', default=False)
+    parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
+    parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
+    parser.add_argument('--resize', type=int, default=0)
+    parser.add_argument('--mode', type=str, default='dummy')
+    parser.add_argument('--port', type=str, default='dummy')
+    opt = parser.parse_args()
+    opt.bysubject = False
+    opt.resize = 286
+    #  Dataset
+    if opt.bysubject:
+        from dataloader.data import DatasetFromFolderSubjects as Dataset
+    else:
+        from dataloader.data import DatasetFromFolder as Dataset
+
+    train_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/train/', opt, mode='train')
+    test_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/test/', opt, mode='test')
+
+    x = train_set.__getitem__(10)

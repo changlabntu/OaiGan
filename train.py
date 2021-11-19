@@ -28,7 +28,7 @@ parser.add_argument('-b', dest='batch_size', type=int, default=1, help='training
 parser.add_argument('--test_batch_size', type=int, default=1, help='testing batch size')
 parser.add_argument('--epoch_count', type=int, default=0, help='the starting epoch count')
 parser.add_argument('--epoch_load', type=int, default=0, help='to load checkpoint form the epoch count')
-parser.add_argument('--n_epochs', type=int, default=101, help='# of iter at starting learning rate')
+parser.add_argument('--n_epochs', type=int, default=301, help='# of iter at starting learning rate')
 parser.add_argument('--n_epochs_decay', type=int, default=100, help='# of iter to linearly decay learning rate to zero')
 parser.add_argument('--lr', type=float, default=0.0002, help='initial learning rate f -or adam')
 parser.add_argument('--lr_policy', type=str, default='lambda', help='learning rate policy: lambda|step|plateau|cosine')
@@ -43,6 +43,10 @@ parser.add_argument('--lseg', type=int, default=0, help='weight on segmentation 
 parser.add_argument('--legacy', action='store_true', dest='legacy', default=False, help='legacy pytorch')
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
+
+from engine.pix2pix import Pix2PixModel
+parser = Pix2PixModel.add_model_specific_args(parser)
+
 opt = parser.parse_args()
 opt.prj = opt.dataset + '_' + opt.prj
 
@@ -58,7 +62,7 @@ print(opt)
 if opt.bysubject:
     from dataloader.data import DatasetFromFolderSubjects as Dataset
 else:
-    from notinuse.data_no_resample import DatasetFromFolder as Dataset
+    from dataloader.data import DatasetFromFolder as Dataset
 
 train_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/train/', opt, mode='train')
 test_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/test/', opt, mode='test')
@@ -101,7 +105,9 @@ else:
 # CUDA_VISIBLE_DEVICES=0 python train.py --dataset pain -b 1 --prj bysubjectattgan --direction aregis1_b --bysubject --resize 286
 
 
+#CUDA_VISIBLE_DEVICES=1 python train.py --dataset painfull -b 6 --prj atttestpix --direction aregis1_b --bysubject --resize 286
 
-#CUDA_VISIBLE_DEVICES=1 python train.py --dataset painfull -b 3 --prj attganL1XX1advXX1advX1 --direction aregis1_b --bysubject --resize 286 --netG attgan
+#CUDA_VISIBLE_DEVICES=0 python train.py --dataset painfull -b 3 --prj attganMixY0Y1Y --direction aregis1_b --bysubject --resize 286 --netG attgan
 
-#CUDA_VISIBLE_DEVICES=1 python train.py --dataset painfull -b 6 --prj atttest --direction aregis1_b --bysubject --resize 286
+#CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj Try8descarGD --direction aregis1_b --resize 286 --netG descar --netD descar
+

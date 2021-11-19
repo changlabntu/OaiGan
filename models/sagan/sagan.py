@@ -46,7 +46,7 @@ class Self_Attn(nn.Module):
 class Generator(nn.Module):
     """Generator."""
 
-    def __init__(self, image_size=64, z_dim=100, conv_dim=64):
+    def __init__(self, batch_size, image_size=64, z_dim=100, conv_dim=64):
         super(Generator, self).__init__()
         self.imsize = image_size
         layer1 = []
@@ -108,7 +108,7 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     """Discriminator, Auxiliary Classifier."""
 
-    def __init__(self, batch_size=64, image_size=64, conv_dim=64):
+    def __init__(self, image_size=64, conv_dim=64):
         super(Discriminator, self).__init__()
         self.imsize = image_size
         layer1 = []
@@ -116,7 +116,7 @@ class Discriminator(nn.Module):
         layer3 = []
         last = []
 
-        layer1.append(SpectralNorm(nn.Conv2d(3, conv_dim, 4, 2, 1)))
+        layer1.append(SpectralNorm(nn.Conv2d(3*2, conv_dim, 4, 2, 1)))
         layer1.append(nn.LeakyReLU(0.1))
 
         curr_dim = conv_dim
@@ -149,13 +149,18 @@ class Discriminator(nn.Module):
         out = self.l1(x)
         out = self.l2(out)
         out = self.l3(out)
+        print(out.shape)  # (B, 256, 16, 16)
         out, p1 = self.attn1(out)
-        out = self.l4(out)
+        print(out.shape)  # (B, 256, 16, 16)
+        if self.imsize == 64:
+            out = self.l4(out)
+            print(out.shape)  # (B, 512, 8, 8)
         out, p2 = self.attn2(out)
-        out = self.last(out)
+        print(out.shape)  # (B, 512, 8, 8)
+        out = self.last(out)  # (B, 1, 5, 5)
 
         return out.squeeze(), p1, p2
 
 
 if __name__ == '__main__':
-    model = Generator(image_size=64, z_dim=100, conv_dim=64)
+    d = Discriminator(128)

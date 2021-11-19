@@ -9,17 +9,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from utils.make_config import load_config
 from dotenv import load_dotenv
+from utils.data_utils import norm_01
 
 load_dotenv('.env')
-
-
-def norm_01(x):
-    """
-    normalize to 0 - 1
-    """
-    x = x - x.min()
-    x = x / x.max()
-    return x
 
 
 def get_model(epochs, name, dir_checkpoints, device):
@@ -28,7 +20,7 @@ def get_model(epochs, name, dir_checkpoints, device):
     return net
 
 
-def overlap_red(x0, y0):
+def overlap_red_old(x0, y0):
     y = 1 * y0
     x = 1 * x0
     c = 0
@@ -40,13 +32,15 @@ def overlap_red(x0, y0):
     return x
 
 
-def overlap_red2(x0, y0, channel):
+def overlap_red(x0, y0):
     y = 1 * y0
     x = 1 * x0
     c = 0
-    x[0, y == c] = 1
+    x[0, y == c] = 0.0 * x[0, y == c]
+    c = 2
     x[1, y == c] = 0.0 * x[1, y == c]
-    x[2, y == c] = 0.0 * x[1, y == c]
+    c = 1
+    x[2, y == c] = 0.0 * x[2, y == c]
     return x
 
 
@@ -72,25 +66,42 @@ class Pix2PixModel:
         #self.irange = [15, 19, 34, 79, 95, 109, 172, 173, 208, 249, 266]  # pain
         # irange = [102, 109, 128, 190, 193, 235, 252, 276, 318, 335]
 
-    def get_one_output(self, i):
+    def get_one_output(self, i, xy, alpha=None):
         opt = self.opt
         x = self.test_set.__getitem__(i)
-        img = x[0]
-        mask = x[1]
 
         # model
-        input = img.unsqueeze(0).to(self.device)
+        oriX = x[0].unsqueeze(0).to(self.device)
+        oriY = x[1].unsqueeze(0).to(self.device)
+
         if not opt.cycle:
             net_g = get_model(epoch, 'netG', self.dir_checkpoints, self.device)
         else:
             net_g = get_model(epoch, 'netG_ab', self.dir_checkpoints, self.device)
-        output = net_g(input, 0*torch.ones(1, 1).cuda())
-        #output = net_g(input)
-        out = output[0][0, ::].detach().cpu()
+
+        if xy == 'x':
+            in_img = oriX
+            out_img = oriY
+        elif xy == 'y':
+            in_img = oriY
+            out_img = oriX
+
+        try:
+            output = net_g(in_img, alpha * torch.ones(1, 2).cuda())#, res=True)
+        except:
+            try:
+                output = net_g(in_img, alpha * torch.ones(1, 1).cuda())
+            except:
+                output = net_g(in_img)
+
+        in_img = in_img.detach().cpu()[0, ::]
+        out_img = out_img.detach().cpu()[0, ::]
+        output = output[0][0, ::].detach().cpu()
+
         if self.opt.att:
-            return img, mask, out, output[1][0, ::].detach().cpu()
+            return in_img, out_img, output, output[1][0, ::].detach().cpu()
         else:
-            return img, mask, out
+            return in_img, out_img, output
 
     def get_t2d(self, ori):
         t2d = self.netg_t2d(ori.cuda().unsqueeze(0))[0][0, ::].detach().cpu()
@@ -106,11 +117,12 @@ class Pix2PixModel:
 parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
 parser.add_argument('--dataset', default='pain', help='name of training dataset')
 parser.add_argument('--testset', default='pain', help='name of testing dataset if different than the training dataset')
-parser.add_argument('--prj', type=str, default='wSeg20', help='name of the project')
+parser.add_argument('--prj', type=str, default='attganTry8descar', help='name of the project')
 parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
-parser.add_argument('--resize', type=int, default=0)
+parser.add_argument('--resize', type=int, default=286)
 parser.add_argument('--flip', action='store_true', dest='flip', default=False)
-parser.add_argument('--nepochs', nargs='+', default=[0, 601, 20], help='which checkpoints to be interfered with')
+parser.add_argument('--nepochs', nargs='+', default=[200, 220, 20], help='which checkpoints to be interfered with')
+parser.add_argument('--nalpha', nargs='+', default=[0, 1, 1], help='list of alphas')
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
 parser.add_argument('--att', action='store_true', dest='att', default=False)
@@ -120,48 +132,63 @@ parser.add_argument('--t2d', action='store_true', dest='t2d', default=True)
 opt = parser.parse_args()
 opt.prj = opt.dataset + '_' + opt.prj
 opt.nepochs = range(int(opt.nepochs[0]), int(opt.nepochs[1]), int(opt.nepochs[2]))
-print(opt)
+print(opt.nalpha)
+
 
 
 test_unit = Pix2PixModel(opt=opt)
 #irange = list(np.random.randint(0, 250, 10))#
 #irange = [15, 19, 34, 79, 95, 109, 172, 173, 208, 249, 266]
-irange = [15, 19, 34, 79, 95, 109, 172, 173, 208, 249, 266]  # pain
+irange = [15, 19, 34, 79, 95, 109, 172, 173, 208, 249, 266][5:]  # pain
+
+zz = list(opt.nalpha)
 
 for epoch in opt.nepochs:
-    outputs = list(map(lambda v: test_unit.get_one_output(v), irange))  # (3, 256, 256) (-1, 1)
-    list_ori = list(zip(*outputs))  # (3, 256, 256) (-1, 1)
-    list_ori_norm = list(map(lambda k: list(map(lambda v: norm_01(v), k)), list_ori[:3]))  # (3, 256, 256) (0, 1)
-    list_t2d = list(map(lambda k: list(map(lambda v: test_unit.get_t2d(v), k)), list_ori[:3]))  # (3, 256, 256) (-1, 1)
-    list_t2d_norm = list(map(lambda k: list(map(lambda v: norm_01(v), k)), list_t2d))  # (3, 256, 256) (0, 1)
-    list_seg = list(map(lambda k: list(map(lambda v: test_unit.get_seg(v), k)), list_t2d_norm))
+    for alpha in np.linspace(float(zz[0]), float(zz[1]), int(zz[2])):
+        out_xy = list(map(lambda v: test_unit.get_one_output(v, 'x', alpha), irange))
+        out_yx = list(map(lambda v: test_unit.get_one_output(v, 'y', alpha), irange))
 
-    list_diff = [x[1] - x[0] for x in list(zip(list_ori[2], list_ori[0]))]
-    #list_diff = [torch.abs(torch.div(x[1] - x[0], x[0])) for x in list(zip(list_ori[1], list_ori[2]))]
-    for i in range(len(list_diff)):
-        diff = list_diff[i]
-        #print(diff.max())
-        diff[diff <= 0] = 0
-        list_diff[i] = diff
+        out_xy = list(zip(*out_xy))
+        out_yx = list(zip(*out_yx))
 
-    to_show = [list_ori[0],
-               list(map(lambda x, y: overlap_red(x, y), list_ori_norm[0], list_seg[0])),
-               list_ori[1],
-               list(map(lambda x, y: overlap_red(x, y), list_ori_norm[1], list_seg[1])),
-               list_ori[2],
-               list(map(lambda x, y: overlap_red(x, y), list_ori_norm[2], list_seg[2])),
-               list_diff,
-               list(map(lambda x, y: overlap_red(x, y), list_diff, list_seg[2]))
-               ]
+        #out_xy = list(map(lambda k: list(map(lambda v: norm_01(v), k)), out_xy[:3]))
+        #out_yx = list(map(lambda k: list(map(lambda v: norm_01(v), k)), out_yx[:3]))
 
-    if opt.att:
-        to_show = to_show + [list_ori[3]]
+        if 0: # segmentations
+            list_ori_norm = list(map(lambda k: list(map(lambda v: norm_01(v), k)), list_ori[:3]))  # (3, 256, 256) (0, 1)
+            list_t2d = list(map(lambda k: list(map(lambda v: test_unit.get_t2d(v), k)), list_ori[:3]))  # (3, 256, 256) (-1, 1)
+            list_t2d_norm = list(map(lambda k: list(map(lambda v: norm_01(v), k)), list_t2d))  # (3, 256, 256) (0, 1)
+            list_seg = list(map(lambda k: list(map(lambda v: test_unit.get_seg(v), k)), list_t2d_norm))
 
-    to_show = [torch.cat(x, 2) for x in to_show]
-    to_show = [x - x.min() for x in to_show]
+        diff_xy = [(x[1] - x[0]) for x in list(zip(out_xy[2], out_xy[0]))]
+        diff_yx = [(x[1] - x[0]) for x in list(zip(out_yx[2], out_yx[0]))]
 
-    imagesc(np.concatenate([x / x.max() for x in to_show], 1), show=False,
-            save=os.path.join("result", opt.prj, str(epoch) + '.jpg'))
+
+        #out_xy[2] = [(x<-0.2)/1 for x in out_xy[2]]
+        #out_yx[2] = [(x<-0.2)/1 for x in out_yx[2]]
+        #diff_xy = [(x>0.5)/1 for x in diff_xy]
+        #diff_yx = [(x>0.5)/1 for x in diff_yx]
+
+        to_show = [out_xy[0],
+                   out_xy[2],
+                   diff_xy,
+                   out_yx[0],
+                   out_yx[2],
+                   diff_yx
+                   #list(map(lambda x, y: overlap_red(x, y), list_ori_norm[0], list_seg[0])),
+                   #list_ori[1],
+                   #list(map(lambda x, y: overlap_red(x, y), list_ori_norm[1], list_seg[1])),
+                   #list_ori[2],
+                   #list(map(lambda x, y: overlap_red(x, y), list_ori_norm[2], list_seg[2])),
+                   #list_diff
+                   #list(map(lambda x, y: overlap_red(x, y), list_diff, list_seg[2]))
+                   ]
+
+        to_show = [torch.cat(x, 2) for x in to_show]
+        to_show = [x - x.min() for x in to_show]
+
+        imagesc(np.concatenate([x / x.max() for x in to_show], 1), show=False,
+                save=os.path.join("result", opt.prj, str(epoch) + '_' + str(alpha) +'.jpg'))
 
 
 
@@ -176,3 +203,5 @@ for epoch in opt.nepochs:
 
 
 # CUDA_VISIBLE_DEVICES=0 python test.py --dataset painfull --nepochs 0 601 10 --prj b6DattganDG01--direction a_b --resize 286
+
+# CUDA_VISIBLE_DEVICES=0 python test.py --dataset painfull --nepochs 100 110 10 --nalpha 0 1 11  --prj attganL1XX1advXX1advX1 --direction a_b --resize 286

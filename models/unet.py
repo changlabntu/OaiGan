@@ -135,3 +135,10 @@ class UNet_clean(nn.Module):
         d = d.view(B, d.shape[1], d.shape[2], d.shape[3])  # (b, c, w, h)
 
         return d
+
+
+if __name__ == '__main__':
+    from utils.data_utils import print_num_of_parameters
+    g = UNet_clean().cuda()
+    print_num_of_parameters(g)
+    o = g(torch.rand(30, 3, 256, 256).cuda())

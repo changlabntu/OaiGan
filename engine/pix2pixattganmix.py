@@ -76,22 +76,36 @@ class Pix2PixModel(pl.LightningModule):
         self.save_hyperparameters(self.hparams)
         self.best_auc = 0
 
+        # input options
+        if self.hparams.netG == 'attgan':
+            self.GZ = True
+        else:
+            self.GZ = False
+
         # GENERATOR
-        self.net_g = define_G(input_nc=self.hparams.input_nc, output_nc=self.hparams.output_nc, ngf=64, netG=self.hparams.netG,
-                              norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[])
+        if self.hparams.netG == 'attgan':
+            from models.AttGAN.attgan import Generator
+            print('use acgan discriminator')
+            self.net_g = Generator(n_attrs=self.hparams.n_attrs, img_size=256)
+        else:
+            self.net_g = define_G(input_nc=self.hparams.input_nc, output_nc=self.hparams.output_nc, ngf=64, netG=self.hparams.netG,
+                                  norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[])
         # DISCRIMINATOR
         # patchgan
         if (self.hparams.netD).startswith('patchgan'):
             from models.cyclegan.models import Discriminator
             self.net_d = Discriminator(input_shape=(6, 256, 256), patch=(self.hparams.netD).split('_')[-1])
-        # acgan
+        elif self.hparams.netD == 'sagan':
+            from models.sagan.sagan import Discriminator
+            print('use sagan discriminator')
+            self.net_d = Discriminator(image_size=64)
         elif self.hparams.netD == 'acgan':
             from models.acgan import Discriminator
             print('use acgan discriminator')
             self.net_d = Discriminator(img_shape=(6, 256, 256), n_classes=2)
         elif self.hparams.netD == 'attgan':
             from models.AttGAN.attgan import Discriminators
-            print('use acgan discriminator')
+            print('use attgan discriminator')
             self.net_d = Discriminators(img_size=256, cls=2)
         # original pix2pix, the size of patchgan is strange, just use for pixel-D
         else:
@@ -99,7 +113,11 @@ class Pix2PixModel(pl.LightningModule):
 
         # INIT
         self.net_g = self.net_g.apply(_weights_init)
-        self.net_d = self.net_d.apply(_weights_init)
+        if self.hparams.netD == 'sagan':
+            print('oo')
+        else:
+            self.net_d = self.net_d.apply(_weights_init)
+
         self.classifier = MRPretrained()
         self.CELoss = CrossEntropyLoss()
 
@@ -129,47 +147,107 @@ class Pix2PixModel(pl.LightningModule):
 
         return [self.optimizer_d, self.optimizer_g], []
 
+    @staticmethod
+    def add_model_specific_args(parent_parser):
+        parser = parent_parser.add_argument_group("LitModel")
+        parser.add_argument("--n_attrs", type=int, default=1)
+        return parent_parser
+
     def backward_g(self, inputs):
         self.net_g.zero_grad()
-        conditioned_images = inputs[0]
-        real_images = inputs[1]
+        loss_g = 0
+        oriX = inputs[0]
+        oriY = inputs[1]
         if self.hparams.bysubject:
             # torch.Size([B, 23, 3, 256, 256])
-            (B, S, C, H, W) = conditioned_images.shape
-            conditioned_images = conditioned_images.view(B*S, C, H, W)
-            real_images = real_images.view(B*S, C, H, W)
+            (B, S, C, H, W) = oriX.shape
+            oriX = oriX.view(B*S, C, H, W)
+            oriY = oriY.view(B*S, C, H, W)
 
-        gout = self.net_g(conditioned_images)
-        fake_images = gout[0]
-        fake_in = torch.cat((fake_images, conditioned_images), 1)
-        dout = self.net_d(fake_in)
-        disc_logits = dout[0]
-        adversarial_loss = self.criterionGAN(disc_logits, torch.ones_like(disc_logits))
+        # ADV(X, X0)+
+        if self.GZ:
+            imgX0 = self.net_g(oriX, a=torch.zeros(B * S, 1).cuda())[0]
+        else:
+            imgX0 = self.net_g(oriX)[0]
+        fake_in = torch.cat((imgX0, oriX), 1)
+        disc_logits = self.net_d(fake_in)[0]
+        adv_XX0 = self.criterionGAN(disc_logits, torch.ones_like(disc_logits))
+        loss_g = loss_g + 1 * adv_XX0
 
-        # calculate reconstruction loss
-        recon_loss = self.criterionL1(fake_images, real_images)
-        loss_g = adversarial_loss + self.hparams.lamb * recon_loss
-        self.log('loss_recon_a', recon_loss, on_step=False, on_epoch=True,
+        # imgX1
+        imgX1 = self.net_g(oriX, a=torch.ones(B * S, 1).cuda())[0]
+
+        # MIX oriX and oriY
+        dx = oriX.shape[2] // 2
+
+        oriA = 1 * oriX
+        oriB = 1 * oriY
+        oriA[:, :, :, :dx] = oriX[:, :, :, :dx]
+        oriA[:, :, :, dx:] = oriY[:, :, :, dx:]
+        oriB[:, :, :, :dx] = oriY[:, :, :, :dx]
+        oriB[:, :, :, dx:] = oriX[:, :, :, dx:]
+        oriX = oriA
+        oriY = oriB
+
+        # ADV(X, X1)+
+        fake_in = torch.cat((imgX1, oriX), 1)
+        disc_logits = self.net_d(fake_in)[0]
+        adv_XX1 = self.criterionGAN(disc_logits, torch.ones_like(disc_logits))
+        loss_g = loss_g + 1 * adv_XX1
+
+        # L1(Y, X0)
+        recon_X0Y = self.criterionL1(imgX0, oriY)
+        loss_g = loss_g + self.hparams.lamb * recon_X0Y
+
+        self.log('loss_recon_a', recon_X0Y, on_step=False, on_epoch=True,
                  prog_bar=True, logger=True, sync_dist=True)
 
-        # target domain identity loss
-        fake_images_b = self.net_g(real_images)[0]
-        #recon_loss_b = nn.MSELoss()(fake_images_b, real_images)
-        recon_loss_b = self.criterionL1(fake_images_b, real_images)
-        loss_g = loss_g + self.hparams.lamb_b * recon_loss_b
-        self.log('loss_recon_b', recon_loss_b, on_step=False, on_epoch=True,
+        #  L1(X, X1)
+        recon_XX1 = self.criterionL1(imgX1, oriX)
+        loss_g = loss_g + self.hparams.lamb * recon_XX1
+
+        self.log('loss_recon_b', recon_XX1, on_step=False, on_epoch=True,
                  prog_bar=True, logger=True, sync_dist=True)
+
+        if 0:
+            #  L1(Y, Y0)
+            imgY0 = self.net_g(oriY, a=torch.zeros(B * S, 1).cuda())[0]
+            recon_Y0Y = self.criterionL1(imgY0, oriY)
+            loss_g = loss_g + self.hparams.lamb * recon_Y0Y
+
+            self.log('loss_recon_Y0Y', recon_Y0Y, on_step=False, on_epoch=True,
+                     prog_bar=True, logger=True, sync_dist=True)
+
+            #  L1(Y, Y1)
+            imgY1 = self.net_g(oriY, a=torch.ones(B * S, 1).cuda())[0]
+            recon_Y1Y = self.criterionL1(imgY1, oriY)
+            loss_g = loss_g + self.hparams.lamb * recon_Y1Y
+
+            self.log('loss_recon_Y1Y', recon_Y1Y, on_step=False, on_epoch=True,
+                     prog_bar=True, logger=True, sync_dist=True)
+
+        # target domain identity loss, not using it
+
+
+
+        if 0:
+            imgX0_b = self.net_g(imgY, a=torch.zeros(B*S, 1).cuda())[0]
+            #recon_loss_b = nn.MSELoss()(imgX0_b, imgY)
+            recon_loss_b = self.criterionL1(imgX0_b, imgY)
+            loss_g = loss_g + self.hparams.lamb_b * recon_loss_b
+            self.log('loss_recon_b', recon_loss_b, on_step=False, on_epoch=True,
+                     prog_bar=True, logger=True, sync_dist=True)
 
         # Prior classification loss
         if 0:
-            class_conditioned_images, _ = self.classifier(conditioned_images)
-            class_real_images, _ = self.classifier(real_images)
+            class_imgX, _ = self.classifier(imgX)
+            class_imgY, _ = self.classifier(imgY)
 
-            classfication_loss = self.CELoss(class_conditioned_images,  torch.ones(1).type(torch.LongTensor).cuda())[0] +\
-                                 self.CELoss(class_real_images, torch.zeros(1).type(torch.LongTensor).cuda())[0]
+            classfication_loss = self.CELoss(class_imgX,  torch.ones(1).type(torch.LongTensor).cuda())[0] +\
+                                 self.CELoss(class_imgY, torch.zeros(1).type(torch.LongTensor).cuda())[0]
 
         if 0:
-            class_out, _ = self.classifier((conditioned_images, real_images))
+            class_out, _ = self.classifier((imgX, imgY))
             pred = torch.argmax(class_out, 1)
             classfication_loss = self.CELoss(class_out, torch.ones(1).type(torch.LongTensor).cuda())[0]
             loss_g = loss_g + 10 * classfication_loss
@@ -183,31 +261,39 @@ class Pix2PixModel(pl.LightningModule):
 
     def backward_d(self, inputs):
         self.net_d.zero_grad()
-        conditioned_images = inputs[0]
-        real_images = inputs[1]
+        oriX = inputs[0]
+        oriY = inputs[1]
         if self.hparams.bysubject:
-            (B, S, C, H, W) = conditioned_images.shape
-            conditioned_images = conditioned_images.view(B*S, C, H, W)
-            real_images = real_images.view(B*S, C, H, W)
-        gout = self.net_g(conditioned_images)
-        fake_images = gout[0].detach()
+            (B, S, C, H, W) = oriX.shape
+            oriX = oriX.view(B*S, C, H, W)
+            oriY = oriY.view(B*S, C, H, W)
+        if self.GZ:
+            imgX0 = self.net_g(oriX, torch.zeros(B * S, 1).cuda())[0].detach()
+            imgX1 = self.net_g(oriX, torch.ones(B * S, 1).cuda())[0].detach()
+        else:
+            imgX0 = self.net_g(oriX)[0].detach()
 
-        # forward d
-        fake_in = torch.cat((fake_images, conditioned_images), 1)
-        dout_fake = self.net_d(fake_in)
-        real_in = torch.cat((real_images, conditioned_images), 1)
-        dout_real = self.net_d(real_in)
+        # ADV(X0, X)-
+        fake_in = torch.cat((imgX0, oriX), 1)
+        fake_logits = self.net_d(fake_in)[0]
+        fake_loss0 = self.criterionGAN(fake_logits, torch.zeros_like(fake_logits))
 
-        # out d
-        fake_logits = dout_fake[0]
-        real_logits = dout_real[0]
-
-        # loss d
-        fake_loss = self.criterionGAN(fake_logits, torch.zeros_like(fake_logits))
+        # ADV(Y, X)+
+        real_in = torch.cat((oriY, oriX), 1)
+        real_logits = self.net_d(real_in)[0]
         real_loss = self.criterionGAN(real_logits, torch.ones_like(real_logits))
 
+        if self.GZ:
+            # ADV(X1, X)-
+            fake_in = torch.cat((imgX1, oriX), 1)
+            fake_logits = self.net_d(fake_in)[0]
+            fake_loss1 = self.criterionGAN(fake_logits, torch.zeros_like(fake_logits))
+
         # Combined D loss
-        loss_d = (real_loss + fake_loss) * 0.5
+        if self.GZ:
+            loss_d = real_loss * 0.5 + fake_loss0 * 0.25 + fake_loss1 * 0.25
+        else:
+            loss_d = real_loss * 0.5 + fake_loss0 * 0.5
         return loss_d
 
     def training_step(self, batch, batch_idx, optimizer_idx):

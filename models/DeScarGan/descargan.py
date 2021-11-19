@@ -1,4 +1,3 @@
-
 # Copyright 2020 University of Basel, Center for medical Image Analysis and Navigation
 #
 # Licensed under the Apache License, Version 2.0 (the “License”);
@@ -19,7 +18,7 @@ import torch.nn.functional as F
 import numpy as np
 
 sig = nn.Sigmoid()
-device ='cuda'
+#device = 'cuda'
 
 
 class Flatten(torch.nn.Module):
@@ -32,10 +31,12 @@ class Identity(nn.Module):
     def forward(self, x):
         return x
 
-ACTIVATION = nn.ReLU
-c_dim =2
 
-def crop_and_concat(upsampled, bypass ,crop=False):
+ACTIVATION = nn.ReLU
+c_dim = 2
+
+
+def crop_and_concat(upsampled, bypass, crop=False):
     if crop:
         c = (bypass.size()[2] - upsampled.size()[2]) // 2
         bypass = F.pad(bypass, (-c, -c, -c, -c))
@@ -43,17 +44,16 @@ def crop_and_concat(upsampled, bypass ,crop=False):
     return torch.cat((upsampled, bypass), 1)
 
 
-def conv2d_bn_block(in_channels, out_channels ,kernel=3, momentum=0.01, activation=ACTIVATION):
-
+def conv2d_bn_block(in_channels, out_channels, kernel=3, momentum=0.01, activation=ACTIVATION):
     return nn.Sequential(
-        nn.Conv2d(in_channels, out_channels ,kernel , padding=1),
+        nn.Conv2d(in_channels, out_channels, kernel, padding=1),
         nn.BatchNorm2d(out_channels, momentum=momentum),
         activation(),
     )
 
 
-def deconv2d_bn_block(in_channels, out_channels, use_upsample=True, kernel=4, stride=2, padding=1, momentum=0.01, activation=ACTIVATION):
-
+def deconv2d_bn_block(in_channels, out_channels, use_upsample=True, kernel=4, stride=2, padding=1, momentum=0.01,
+                      activation=ACTIVATION):
     if use_upsample:
         up = nn.Sequential(
             nn.Upsample(scale_factor=2),
@@ -69,7 +69,6 @@ def deconv2d_bn_block(in_channels, out_channels, use_upsample=True, kernel=4, st
 
 
 def dense_layer_bn(in_dim, out_dim, momentum=0.01, activation=ACTIVATION):
-
     return nn.Sequential(
         nn.Linear(in_dim, out_dim),
         nn.BatchNorm1d(out_dim, momentum=momentum),
@@ -77,21 +76,16 @@ def dense_layer_bn(in_dim, out_dim, momentum=0.01, activation=ACTIVATION):
     )
 
 
-
 def conv2d_block(in_channels, out_channels, kernel=3, stride=1, padding=1, activation=ACTIVATION):
-
     return nn.Sequential(
         nn.Conv2d(in_channels, out_channels, kernel, stride=stride, padding=padding),
         activation(),
     )
 
 
-
-
 class Generator(nn.Module):
 
-
-    def __init__(self, n_channels=1, nf=64, batch_norm=True, activation=ACTIVATION):
+    def __init__(self, n_channels=1, nf=32, batch_norm=True, activation=ACTIVATION):
         super(Generator, self).__init__()
 
         act = activation
@@ -100,7 +94,7 @@ class Generator(nn.Module):
 
         max_pool = nn.MaxPool2d(2)
         act = activation
-        self.label_k =torch.tensor([0 ,1]).half()
+        self.label_k = torch.tensor([0, 1]).half().cuda()
 
         self.down0 = nn.Sequential(
             conv_block(n_channels + c_dim, nf, activation=act),
@@ -115,7 +109,6 @@ class Generator(nn.Module):
             max_pool,
             conv_block(2 * nf, 4 * nf, activation=act),
             conv_block(4 * nf, 4 * nf, activation=act),
-
 
         )
         self.down3 = nn.Sequential(
@@ -132,12 +125,11 @@ class Generator(nn.Module):
         )
         self.up2 = deconv2d_bn_block(4 * nf, 2 * nf, activation=act)
         self.conv6 = nn.Sequential(
-            conv_block( 4* nf, 2 * nf, activation=act),
+            conv_block(4 * nf, 2 * nf, activation=act),
             conv_block(2 * nf, 2 * nf, activation=act),
         )
 
-
-        self.up1 = deconv2d_bn_block( 2* nf, nf, activation=act)
+        self.up1 = deconv2d_bn_block(2 * nf, nf, activation=act)
 
         self.conv7_k = nn.Sequential(
             conv_block(nf, nf, activation=act),
@@ -149,7 +141,11 @@ class Generator(nn.Module):
             conv_block(nf, n_channels, activation=nn.Tanh),
         )
 
-    def forward(self, x, c):
+    def forward(self, xori, a, res=False):
+        x = 1 * xori
+
+        # c: (B, C)
+        c = a
         c1 = c.view(c.size(0), c.size(1), 1, 1)
         c1 = c1.repeat(1, 1, x.size(2), x.size(3))
         x = torch.cat([x, c1], dim=1)
@@ -160,29 +156,33 @@ class Generator(nn.Module):
         x3 = self.down3(x2)
 
         xu3 = self.up3(x3)
-        cat3 = crop_and_concat(xu3, x2)
+        cat3 = torch.cat([xu3, x2], 1)
         x5 = self.conv5(cat3)
         xu2 = self.up2(x5)
-        cat2 = crop_and_concat(xu2, x1)
+        cat2 = torch.cat([xu2, x1],1)
 
         x6 = self.conv6(cat2)
         xu1 = self.up1(x6)
-        cat1 = crop_and_concat(xu1, x0)
+        #cat1 = crop_and_concat(xu1, x0)
 
         if self.label_k in c:
             x7 = self.conv7_k(xu1)
         else:
             x7 = self.conv7_g(xu1)
 
-        return x7
+        # residual
+        if res:
+            x7 = x7 + xori
+
+        return x7,
 
 
 class Discriminator(nn.Module):
 
-    def __init__(self, n_channels=1, init_filters=32, batch_norm=False):
+    def __init__(self, n_channels=6, init_filters=16, batch_norm=False):
         super(Discriminator, self).__init__()
         nf = init_filters
-        self.label_k = torch.ones(1).long()
+        self.label_k = torch.ones(1).long().cuda()
 
         conv_block = conv2d_bn_block if batch_norm else conv2d_block
 
@@ -215,14 +215,14 @@ class Discriminator(nn.Module):
         self.linearclass = nn.Sequential(
 
             Flatten(),
-            nn.Linear(512 * 4 * 4, 64),
+            nn.Linear(16 * nf * 4 * 4, 64),
             nn.ReLU(True),
             nn.Dropout(p=0.1),
             nn.Linear(64, 2),
 
         )
 
-    def forward(self, x, label):
+    def forward(self, x, label=torch.ones(1).long().cuda()):
         h = self.encoder(x)
         if label == self.label_k:
             out = self.conv_k(h)
@@ -234,3 +234,14 @@ class Discriminator(nn.Module):
         klasse = self.linearclass(zwischen)
 
         return out, klasse.reshape(klasse.size(0), klasse.size(1))
+
+
+if __name__ == '__main__':
+    g = Generator(n_channels=3, batch_norm=False)#.cuda()
+    #from torchsummary import summary
+    from utils.data_utils import print_num_of_parameters
+    print_num_of_parameters(g)
+
+    d = Discriminator()
+    #summary(g, [(3, 256, 256), (2)])
+    #o = g(torch.rand(30, 3, 256, 256).cuda(), torch.ones(30, 2).cuda())

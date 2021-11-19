@@ -17,7 +17,7 @@ MAX_DIM = 64 * 16  # 1024
 class Generator(nn.Module): #layers was 5
     def __init__(self, enc_dim=64, enc_layers=5, enc_norm_fn='batchnorm', enc_acti_fn='lrelu',
                  dec_dim=64, dec_layers=5, dec_norm_fn='batchnorm', dec_acti_fn='relu',
-                 n_attrs=13, shortcut_layers=1, inject_layers=0, img_size=128):
+                 n_attrs=1, shortcut_layers=1, inject_layers=0, img_size=128):
         super(Generator, self).__init__()
         self.shortcut_layers = min(shortcut_layers, dec_layers - 1)
         self.inject_layers = min(inject_layers, dec_layers - 1)
