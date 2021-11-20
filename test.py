@@ -204,4 +204,5 @@ for epoch in opt.nepochs:
 
 # CUDA_VISIBLE_DEVICES=0 python test.py --dataset painfull --nepochs 0 601 10 --prj b6DattganDG01--direction a_b --resize 286
 
-# CUDA_VISIBLE_DEVICES=0 python test.py --dataset painfull --nepochs 100 110 10 --nalpha 0 1 11  --prj attganL1XX1advXX1advX1 --direction a_b --resize 286
+# CUDA_VISIBLE_DEVICES=0 python test.py --dataset pain --nepochs 0 910 10 --nalpha 0 1 2  --prj Try3descarG --direction a_b --resize 286
+

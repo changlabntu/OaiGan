@@ -327,3 +327,5 @@ if __name__ == '__main__':
     netg = Generator(enc_dim=64, enc_layers=5, enc_norm_fn='batchnorm', enc_acti_fn='lrelu',
                  dec_dim=64, dec_layers=5, dec_norm_fn='batchnorm', dec_acti_fn='relu',
                  n_attrs=1, shortcut_layers=1, inject_layers=0, img_size=256)
+
+    netd = Discriminators(img_size=256)

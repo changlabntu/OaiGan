@@ -109,5 +109,5 @@ else:
 
 #CUDA_VISIBLE_DEVICES=0 python train.py --dataset painfull -b 3 --prj attganMixY0Y1Y --direction aregis1_b --bysubject --resize 286 --netG attgan
 
-#CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj Try8descarGD --direction aregis1_b --resize 286 --netG descar --netD descar
+#CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj Try8bAttG --direction aregis1_b --resize 286 --netG attgan
 
