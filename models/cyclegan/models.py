@@ -92,6 +92,40 @@ class GeneratorResNet(nn.Module):
 ##############################
 
 
+class DiscriminatorsAttgan(nn.Module):
+    # No instancenorm in fcs in source code, which is different from paper.
+    def __init__(self, dim=64, norm_fn='instancenorm', acti_fn='lrelu',
+                 fc_dim=1024, fc_norm_fn='none', fc_acti_fn='lrelu', n_layers=5, img_size=128, cls=13):
+        super(DiscriminatorsAttgan, self).__init__()
+        self.f_size = img_size // 2 ** n_layers
+        maxdim = 64 * 16
+
+        layers = []
+        n_in = 3 * 2 # temp
+        for i in range(n_layers):
+            n_out = min(dim * 2 ** i, maxdim)
+            layers += [Conv2dBlock(
+                n_in, n_out, (4, 4), stride=2, padding=1, norm_fn=norm_fn, acti_fn=acti_fn
+            )]
+            n_in = n_out
+        self.conv = nn.Sequential(*layers)
+        self.fc_adv = nn.Sequential(
+            LinearBlock(1024 * self.f_size * self.f_size, fc_dim, fc_norm_fn, fc_acti_fn),
+            LinearBlock(fc_dim, 1, 'none', 'none')
+        )
+        self.fc_cls = nn.Sequential(
+            LinearBlock(1024 * self.f_size * self.f_size, fc_dim, fc_norm_fn, fc_acti_fn),
+            LinearBlock(fc_dim, cls, 'none', 'none')
+        )
+
+    def forward(self, x):
+        h = self.conv(x)
+        h = h.view(h.size(0), -1)
+        adv = self.fc_adv(h)
+        cls = self.fc_cls(h)
+        return adv, cls
+
+
 class Discriminator(nn.Module):
     def __init__(self, input_shape, patch):
         super(Discriminator, self).__init__()

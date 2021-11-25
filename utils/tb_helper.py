@@ -12,6 +12,9 @@ def remove_runs_without_checkpoints(source):
 
 
 source = 'logs/'
+
+remove_runs_without_checkpoints(source)
+
 runs = glob.glob(source + '*/*/')
 for run in runs:
     with open(run + 'hparams.yaml') as f:

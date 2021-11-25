@@ -20,27 +20,21 @@ def get_model(epochs, name, dir_checkpoints, device):
     return net
 
 
-def overlap_red_old(x0, y0):
-    y = 1 * y0
-    x = 1 * x0
-    c = 0
-    x[0, y == c] = 0.0 * x[0, y == c]
-    c = 2
-    x[1, y == c] = 0.0 * x[1, y == c]
-    c = 1
-    x[2, y == c] = 0.0 * x[2, y == c]
-    return x
-
-
 def overlap_red(x0, y0):
     y = 1 * y0
-    x = 1 * x0
+    x = 1 * x0.abs()
+
     c = 0
-    x[0, y == c] = 0.0 * x[0, y == c]
+    x[1, y == c] = 0
+    x[2, y == c] = 0
+
     c = 2
-    x[1, y == c] = 0.0 * x[1, y == c]
+    x[0, y == c] = 0
+    x[1, y == c] = 0
+
     c = 1
-    x[2, y == c] = 0.0 * x[2, y == c]
+    x[0, y == c] = 0
+    x[2, y == c] = 0
     return x
 
 
@@ -86,6 +80,8 @@ class Pix2PixModel:
             in_img = oriY
             out_img = oriX
 
+        alpha = alpha
+
         try:
             output = net_g(in_img, alpha * torch.ones(1, 2).cuda())#, res=True)
         except:
@@ -112,16 +108,21 @@ class Pix2PixModel:
         seg = torch.argmax(seg, 1)[0,::].detach().cpu()
         return seg
 
+    def get_all_seg(self, input):
+        list_t2d = list(map(lambda k: list(map(lambda v: self.get_t2d(v), k)), input))  # (3, 256, 256) (-1, 1)
+        list_t2d_norm = list(map(lambda k: list(map(lambda v: norm_01(v), k)), list_t2d))  # (3, 256, 256) (0, 1)
+        list_seg = list(map(lambda k: list(map(lambda v:self.get_seg(v), k)), list_t2d_norm))
+        return list_seg
 
 # Testing settings
 parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
 parser.add_argument('--dataset', default='pain', help='name of training dataset')
 parser.add_argument('--testset', default='pain', help='name of testing dataset if different than the training dataset')
-parser.add_argument('--prj', type=str, default='attganTry8descar', help='name of the project')
+parser.add_argument('--prj', type=str, default='NS2AttG', help='name of the project')
 parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
 parser.add_argument('--resize', type=int, default=286)
 parser.add_argument('--flip', action='store_true', dest='flip', default=False)
-parser.add_argument('--nepochs', nargs='+', default=[200, 220, 20], help='which checkpoints to be interfered with')
+parser.add_argument('--nepochs', nargs='+', default=[100, 110, 10], help='which checkpoints to be interfered with')
 parser.add_argument('--nalpha', nargs='+', default=[0, 1, 1], help='list of alphas')
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
@@ -154,15 +155,17 @@ for epoch in opt.nepochs:
         #out_xy = list(map(lambda k: list(map(lambda v: norm_01(v), k)), out_xy[:3]))
         #out_yx = list(map(lambda k: list(map(lambda v: norm_01(v), k)), out_yx[:3]))
 
-        if 0: # segmentations
-            list_ori_norm = list(map(lambda k: list(map(lambda v: norm_01(v), k)), list_ori[:3]))  # (3, 256, 256) (0, 1)
-            list_t2d = list(map(lambda k: list(map(lambda v: test_unit.get_t2d(v), k)), list_ori[:3]))  # (3, 256, 256) (-1, 1)
-            list_t2d_norm = list(map(lambda k: list(map(lambda v: norm_01(v), k)), list_t2d))  # (3, 256, 256) (0, 1)
-            list_seg = list(map(lambda k: list(map(lambda v: test_unit.get_seg(v), k)), list_t2d_norm))
+        seg_xy = test_unit.get_all_seg(out_xy)
+        seg_yx = test_unit.get_all_seg(out_yx)
+
 
         diff_xy = [(x[1] - x[0]) for x in list(zip(out_xy[2], out_xy[0]))]
         diff_yx = [(x[1] - x[0]) for x in list(zip(out_yx[2], out_yx[0]))]
 
+        diff_xy[0][0, 0, 0] = 2
+        diff_xy[0][0, 0, 1] = -2
+        diff_yx[0][0, 0, 0] = 2
+        diff_yx[0][0, 0, 1] = -2
 
         #out_xy[2] = [(x<-0.2)/1 for x in out_xy[2]]
         #out_yx[2] = [(x<-0.2)/1 for x in out_yx[2]]
@@ -172,9 +175,11 @@ for epoch in opt.nepochs:
         to_show = [out_xy[0],
                    out_xy[2],
                    diff_xy,
+                   list(map(lambda x, y: overlap_red(x, y), diff_xy, seg_xy[2])),
                    out_yx[0],
                    out_yx[2],
-                   diff_yx
+                   diff_yx,
+                   list(map(lambda x, y: overlap_red(x, y), diff_yx, seg_yx[2])),
                    #list(map(lambda x, y: overlap_red(x, y), list_ori_norm[0], list_seg[0])),
                    #list_ori[1],
                    #list(map(lambda x, y: overlap_red(x, y), list_ori_norm[1], list_seg[1])),

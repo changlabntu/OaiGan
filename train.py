@@ -2,7 +2,7 @@ from __future__ import print_function
 import argparse
 import torch.nn as nn
 from torch.utils.data import DataLoader
-import os
+import os, shutil
 from dotenv import load_dotenv
 load_dotenv('.env')
 
@@ -48,6 +48,7 @@ from engine.pix2pix import Pix2PixModel
 parser = Pix2PixModel.add_model_specific_args(parser)
 
 opt = parser.parse_args()
+shutil.copy('engine/pix2pix.py', 'logs/' + opt.prj + '.py')
 opt.prj = opt.dataset + '_' + opt.prj
 
 opt.not_tracking_hparams = ['mode', 'port', 'epoch_load', 'legacy', 'threads', 'test_batch_size']

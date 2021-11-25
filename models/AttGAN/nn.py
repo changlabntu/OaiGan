@@ -40,7 +40,7 @@ def add_activation(layers, fn):
     elif fn == 'relu':
         layers.append(nn.ReLU())
     elif fn == 'lrelu':
-        layers.append(nn.LeakyReLU())
+        layers.append(nn.LeakyReLU(0.01))  # pix2pix use 0.2
     elif fn == 'sigmoid':
         layers.append(nn.Sigmoid())
     elif fn == 'tanh':

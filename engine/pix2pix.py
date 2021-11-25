@@ -12,6 +12,7 @@ from utils.metrics_segmentation import SegmentationCrossEntropyLoss
 from utils.metrics_classification import CrossEntropyLoss, GetAUC
 from utils.data_utils import *
 
+
 def mix_lr(oriX, oriY):
     dx = oriX.shape[2] // 2
 
@@ -96,7 +97,7 @@ class Pix2PixModel(pl.LightningModule):
         # GENERATOR
         if self.hparams.netG == 'attgan':
             from models.AttGAN.attgan import Generator
-            print('use acgan discriminator')
+            print('use attgan discriminator')
             self.net_g = Generator(enc_dim=self.hparams.ngf, dec_dim=self.hparams.ngf, n_attrs=self.hparams.n_attrs, img_size=256)
             self.net_g_inc = 1
         elif self.hparams.netG == 'descar':
@@ -153,6 +154,7 @@ class Pix2PixModel(pl.LightningModule):
         self.dir_checkpoints = checkpoints
 
         self.criterionL1 = nn.L1Loss().cuda()
+        self.criterionL1_weighted = nn.L1Loss(reduction='none').cuda()
         if self.hparams.gan_mode == 'vanilla':
             self.criterionGAN = nn.BCEWithLogitsLoss()
         else:
@@ -199,6 +201,15 @@ class Pix2PixModel(pl.LightningModule):
             self.log(log, coeff * l1, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         return loss
 
+    def add_loss_L1_weighted(self, a, b, loss, coeff, log=None, weight=None):
+        l1 = self.criterionL1_weighted(a, b)
+        l1 = l1.mean(1)
+        l1 = torch.mul(l1, weight).mean()
+        loss = loss + coeff * l1
+        if log is not None:
+            self.log(log, coeff * l1, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        return loss
+
     def backward_g(self, inputs):
         self.net_g.zero_grad()
         loss_g = 0
@@ -215,26 +226,31 @@ class Pix2PixModel(pl.LightningModule):
             BS = B
 
         # generating...
-        if self.net_g_inc > 0:
-            imgX0 = self.net_g(oriX, a=torch.zeros(BS, self.net_g_inc).cuda())[0]
-            imgY1 = self.net_g(oriY, a=torch.ones(BS, self.net_g_inc).cuda())[0]
-            #imgX01 = self.net_g(imgX0, a=torch.ones(BS, self.net_g_inc).cuda())[0]  # cyc
-            #imgY10 = self.net_g(imgY1, a=torch.zeros(BS, self.net_g_inc).cuda())[0]  # cyc
-        else:
-            imgX0 = self.net_g(oriX)[0]
+        imgX0 = self.net_g(oriX, a=torch.zeros(BS, self.net_g_inc).cuda())[0]
+        imgX1 = self.net_g(oriX, a=torch.ones(BS, self.net_g_inc).cuda())[0]
+        #imgX01 = self.net_g(imgX0, a=torch.ones(BS, self.net_g_inc).cuda())[0]  # cyc
+        #imgY10 = self.net_g(imgY1, a=torch.zeros(BS, self.net_g_inc).cuda())[0]  # cyc
 
-        # ADV(X0, X)+
-        loss_g = self.add_loss_adv(a=imgX0, b=oriX, loss=loss_g, coeff=1, truth=True)
+        # segmentation
+        if 0:
+            oriXseg = torch.argmax(self.seg_model(oriX)[0], 1)
+            oriYseg = torch.argmax(self.seg_model(oriY)[0], 1)
+            #imgX0seg = torch.argmax(self.seg_model(imgX0)[0], 1)
+            # L1(X0, Y)
+            loss_g = self.add_loss_L1_weighted(a=imgX0, b=oriY, loss=loss_g, coeff=self.hparams.lamb, weight=(oriYseg == 1))
+            loss_g = self.add_loss_L1_weighted(a=imgX0, b=oriX, loss=loss_g, coeff=self.hparams.lamb, weight=(oriXseg != 1))
+
+        # ADV(X0)+
+        loss_g = self.add_loss_adv(a=imgX0, b=None, loss=loss_g, coeff=1, truth=True, stacked=False)
 
         # L1(X0, Y)
         loss_g = self.add_loss_L1(a=imgX0, b=oriY, loss=loss_g, coeff=self.hparams.lamb)
 
-        # L1(Y1, X)
-        #loss_g = self.add_loss_L1(a=imgY1, b=oriX, loss=loss_g, coeff=self.hparams.lamb)
+        # L1(X1, X)
+        loss_g = self.add_loss_L1(a=imgX1, b=oriX, loss=loss_g, coeff=self.hparams.lamb * 0.1)
 
-        # ADV(Y, Y1)+
-        #loss_g = self.add_loss_adv(a=oriY, b=imgY1, loss=loss_g, coeff=1, truth=True)
-
+        # ADV(X1)+
+        loss_g = self.add_loss_adv(a=imgX1, b=None, loss=loss_g, coeff=1, truth=True, stacked=False)
         return loss_g
 
     def backward_d(self, inputs):
@@ -254,19 +270,19 @@ class Pix2PixModel(pl.LightningModule):
 
         if self.net_g_inc > 0:
             imgX0 = self.net_g(oriX, torch.zeros(BS, self.net_g_inc).cuda())[0].detach()
-            imgY1 = self.net_g(oriY, torch.ones(BS, self.net_g_inc).cuda())[0].detach()
+            imgX1 = self.net_g(oriX, torch.ones(BS, self.net_g_inc).cuda())[0].detach()
         else:
             imgX0 = self.net_g(oriX)[0].detach()
 
         ######
-        # ADV(X0, X)-
-        loss_d = self.add_loss_adv(a=imgX0, b=oriX, loss=loss_d, coeff=0.25, truth=False)
+        # ADV(X0)-
+        loss_d = self.add_loss_adv(a=imgX0, b=None, loss=loss_d, coeff=0.25, truth=False, stacked=False)
 
-        # ADV(Y, X)+
-        loss_d = self.add_loss_adv(a=oriY, b=oriX, loss=loss_d, coeff=0.5, truth=True)
+        # ADV(Y)+
+        loss_d = self.add_loss_adv(a=oriY, b=None, loss=loss_d, coeff=0.5, truth=True)
 
-        # ADV(Y, Y1)-
-        #loss_d = self.add_loss_adv(a=oriY, b=imgY1, loss=loss_d, coeff=0.25, truth=False)
+        # ADV(X1)-
+        loss_d = self.add_loss_adv(a=imgX1, b=None, loss=loss_d, coeff=0.25, truth=False, stacked=False)
 
         self.log('loss_d', loss_d, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
         return loss_d

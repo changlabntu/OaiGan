@@ -523,7 +523,7 @@ class PixelDiscriminator(nn.Module):
 if __name__ == '__main__':
     g = UnetGenerator(input_nc=3, output_nc=3, num_downs=8, ngf=64, norm_layer=nn.BatchNorm2d,
                                     use_dropout=False).cuda()
-    from torchsummary import summary
+   #from torchsummary import summary
     from utils.data_utils import print_num_of_parameters
     print_num_of_parameters(g)
-    summary(g, [(3, 256, 256)])
+    #summary(g, [(3, 256, 256)])
