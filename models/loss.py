@@ -43,7 +43,6 @@ class GANLoss(nn.Module):
         Returns:
             A label tensor filled with ground truth label, and with the size of the input
         """
-
         if target_is_real:
             target_tensor = self.real_label
         else:
@@ -60,7 +59,7 @@ class GANLoss(nn.Module):
         Returns:
             the calculated loss.
         """
-        if self.gan_mode == 'wgangp':
+        if self.gan_mode in ['lsgan', 'wgangp']:
             if target_is_real.mean() == 1:
                 target_is_real = 1
             else:

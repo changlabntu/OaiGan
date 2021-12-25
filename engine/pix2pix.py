@@ -98,7 +98,8 @@ class Pix2PixModel(pl.LightningModule):
         if self.hparams.netG == 'attgan':
             from models.AttGAN.attgan import Generator
             print('use attgan discriminator')
-            self.net_g = Generator(enc_dim=self.hparams.ngf, dec_dim=self.hparams.ngf, n_attrs=self.hparams.n_attrs, img_size=256)
+            self.net_g = Generator(enc_dim=self.hparams.ngf, dec_dim=self.hparams.ngf,
+                                   n_attrs=self.hparams.n_attrs, img_size=256)
             self.net_g_inc = 1
         elif self.hparams.netG == 'descar':
             from models.DeScarGan.descargan import Generator
@@ -231,15 +232,6 @@ class Pix2PixModel(pl.LightningModule):
         #imgX01 = self.net_g(imgX0, a=torch.ones(BS, self.net_g_inc).cuda())[0]  # cyc
         #imgY10 = self.net_g(imgY1, a=torch.zeros(BS, self.net_g_inc).cuda())[0]  # cyc
 
-        # segmentation
-        if 0:
-            oriXseg = torch.argmax(self.seg_model(oriX)[0], 1)
-            oriYseg = torch.argmax(self.seg_model(oriY)[0], 1)
-            #imgX0seg = torch.argmax(self.seg_model(imgX0)[0], 1)
-            # L1(X0, Y)
-            loss_g = self.add_loss_L1_weighted(a=imgX0, b=oriY, loss=loss_g, coeff=self.hparams.lamb, weight=(oriYseg == 1))
-            loss_g = self.add_loss_L1_weighted(a=imgX0, b=oriX, loss=loss_g, coeff=self.hparams.lamb, weight=(oriXseg != 1))
-
         # ADV(X0)+
         loss_g = self.add_loss_adv(a=imgX0, b=None, loss=loss_g, coeff=1, truth=True, stacked=False)
 
@@ -254,7 +246,7 @@ class Pix2PixModel(pl.LightningModule):
         return loss_g
 
     def backward_d(self, inputs):
-        loss_d= 0
+        loss_d = 0
         self.net_d.zero_grad()
         oriX = inputs[0]
         oriY = inputs[1]

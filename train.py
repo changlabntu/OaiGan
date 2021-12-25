@@ -6,6 +6,7 @@ import os, shutil
 from dotenv import load_dotenv
 load_dotenv('.env')
 
+# Arguments
 parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
 # Project name
 parser.add_argument('--prj', type=str, default='', help='name of the project')
@@ -16,6 +17,7 @@ parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
 parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
 parser.add_argument('--resize', type=int, default=0)
 # Model
+parser.add_argument('--res', action='store_true', dest='res', default=False, help='residual generator')
 parser.add_argument('--gan_mode', type=str, default='vanilla', help='gan mode')
 parser.add_argument('--netG', type=str, default='unet_256', help='netG model')
 parser.add_argument('--netD', type=str, default='patchgan_16', help='netD model')
@@ -44,20 +46,16 @@ parser.add_argument('--legacy', action='store_true', dest='legacy', default=Fals
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
 
+# Model-specific Arguments
 from engine.pix2pix import Pix2PixModel
 parser = Pix2PixModel.add_model_specific_args(parser)
 
+# Finalize Arguments
 opt = parser.parse_args()
 shutil.copy('engine/pix2pix.py', 'logs/' + opt.prj + '.py')
 opt.prj = opt.dataset + '_' + opt.prj
-
 opt.not_tracking_hparams = ['mode', 'port', 'epoch_load', 'legacy', 'threads', 'test_batch_size']
-
 print(opt)
-
-#cudnn.benchmark = True
-#torch.manual_seed(opt.seed)
-#torch.cuda.manual_seed(opt.seed)
 
 #  Dataset
 if opt.bysubject:
@@ -67,9 +65,6 @@ else:
 
 train_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/train/', opt, mode='train')
 test_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/test/', opt, mode='test')
-
-print('training set length: ' + str(len(train_set)))
-print('testing set length: ' + str(len(test_set)))
 
 train_loader = DataLoader(dataset=train_set, num_workers=opt.threads, batch_size=opt.batch_size, shuffle=True)
 test_loader = DataLoader(dataset=test_set, num_workers=opt.threads, batch_size=opt.test_batch_size, shuffle=False)
@@ -110,5 +105,8 @@ else:
 
 #CUDA_VISIBLE_DEVICES=0 python train.py --dataset painfull -b 3 --prj attganMixY0Y1Y --direction aregis1_b --bysubject --resize 286 --netG attgan
 
-#CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj Try8bAttG --direction aregis1_b --resize 286 --netG attgan
+#CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj TryAgain --direction aregis1_b --resize 286
+
+#CUDA_VISIBLE_DEVICES=0 python train.py --dataset painfull384 -b 16 --prj NS2AttG384 --direction a_b --netG attgan
+
 
