@@ -35,8 +35,6 @@ class MRPretrained(nn.Module):
     def forward(self, x):   # (23, 3, 256, 256)
         x0 = x[0]
         x1 = x[1]
-        # dummies
-        out = None  # output of the model
         features = None  # features we want to further analysis
         B = 1
         # features
@@ -57,9 +55,6 @@ class MRPretrained(nn.Module):
 
 
 class BaseModel(pl.LightningModule):
-    """
-    There is a lot of patterned noise and other failures when using lightning
-    """
     def __init__(self, hparams, train_loader, test_loader, checkpoints):
         super(BaseModel, self).__init__()
         # initialize
@@ -69,7 +64,7 @@ class BaseModel(pl.LightningModule):
         self.dir_checkpoints = checkpoints
 
         # hyperparameters
-        hparams = {x:vars(hparams)[x] for x in vars(hparams).keys() if x not in hparams.not_tracking_hparams}
+        hparams = {x: vars(hparams)[x] for x in vars(hparams).keys() if x not in hparams.not_tracking_hparams}
         hparams.pop('not_tracking_hparams', None)
         self.hparams = hparams
         self.hparams.update(hparams)
@@ -150,23 +145,17 @@ class BaseModel(pl.LightningModule):
         print(print_num_of_parameters(self.net_g))
 
     def configure_optimizers(self):
-        self.optimizer_g = optim.Adam(list(self.net_g.parameters()) + list(self.classifier.parameters()), lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
+        self.optimizer_g = optim.Adam(list(self.net_g.parameters()) + list(self.classifier.parameters()),
+                                      lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
         self.optimizer_d = optim.Adam(self.net_d.parameters(), lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
-
         return [self.optimizer_d, self.optimizer_g], []
 
-    @staticmethod
-    def add_model_specific_args(parent_parser):
-        parser = parent_parser.add_argument_group("LitModel")
-        parser.add_argument("--n_attrs", type=int, default=1)
-        return parent_parser
-
-    def add_loss_adv(self, a, b, loss, coeff, truth, log=None, stacked=False):
+    def add_loss_adv(self, a, b, net_d, loss, coeff, truth, log=None, stacked=False):
         if stacked:
             fake_in = torch.cat((a, b), 1)
         else:
             fake_in = torch.cat((a, a), 1)
-        disc_logits = self.net_d(fake_in)[0]
+        disc_logits = net_d(fake_in)[0]
         if truth:
             adv = self.criterionGAN(disc_logits, torch.ones_like(disc_logits))
         else:

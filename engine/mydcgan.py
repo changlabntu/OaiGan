@@ -32,7 +32,7 @@ class Pix2PixModel(BaseModel):
     def backward_g(self, inputs):
         # ADV(X0)+
         loss_g = 0
-        loss_g = self.add_loss_adv(a=self.imgX0, b=None, loss=loss_g, coeff=1, truth=True, stacked=False)
+        loss_g = self.add_loss_adv(a=self.imgX0, b=None, net_d=self.net_d, loss=loss_g, coeff=1, truth=True, stacked=False)
 
         # L1(X0, Y)
         loss_g = self.add_loss_L1(a=self.imgX0, b=self.oriY, loss=loss_g, coeff=self.hparams.lamb)
@@ -41,18 +41,18 @@ class Pix2PixModel(BaseModel):
         loss_g = self.add_loss_L1(a=self.imgX1, b=self.oriX, loss=loss_g, coeff=self.hparams.lamb * 0.1)
 
         # ADV(X1)+
-        loss_g = self.add_loss_adv(a=self.imgX1, b=None, loss=loss_g, coeff=1, truth=True, stacked=False)
+        loss_g = self.add_loss_adv(a=self.imgX1, b=None, net_d=self.net_d, loss=loss_g, coeff=1, truth=True, stacked=False)
         return loss_g
 
     def backward_d(self, inputs):
         loss_d = 0
         # ADV(X0)-
-        loss_d = self.add_loss_adv(a=self.imgX0, b=None, loss=loss_d, coeff=0.25, truth=False, stacked=False)
+        loss_d = self.add_loss_adv(a=self.imgX0, b=None, net_d=self.net_d, loss=loss_d, coeff=0.25, truth=False, stacked=False)
 
         # ADV(Y)+
-        loss_d = self.add_loss_adv(a=self.oriY, b=None, loss=loss_d, coeff=0.5, truth=True)
+        loss_d = self.add_loss_adv(a=self.oriY, b=None, net_d=self.net_d, loss=loss_d, coeff=0.5, truth=True)
 
         # ADV(X1)-
-        loss_d = self.add_loss_adv(a=self.imgX1, b=None, loss=loss_d, coeff=0.25, truth=False, stacked=False)
+        loss_d = self.add_loss_adv(a=self.imgX1, b=None, net_d=self.net_d, loss=loss_d, coeff=0.25, truth=False, stacked=False)
         return loss_d
 
