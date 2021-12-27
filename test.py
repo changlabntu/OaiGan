@@ -7,7 +7,6 @@ import torch
 from torchvision.utils import make_grid
 import numpy as np
 import matplotlib.pyplot as plt
-from utils.make_config import load_config
 from dotenv import load_dotenv
 from utils.data_utils import norm_01
 
@@ -97,7 +96,6 @@ class Pix2PixModel:
         return t2d
 
     def get_seg(self, ori):
-        print(ori.shape)
         seg = self.seg_model(ori.cuda().unsqueeze(0))
         seg = torch.argmax(seg, 1)[0,::].detach().cpu()
         return seg
@@ -160,17 +158,18 @@ for epoch in opt.nepochs:
         diff_yx[0][0, 0, 1] = -2
 
         to_show = [out_xy[0],
+                   list(map(lambda x, y: overlap_red(x, y), out_xy[0], seg_xy[0])),
                    #seg_xy[0],
                    out_xy[2],
                    #seg_xy[2],
                    diff_xy,
                    list(map(lambda x, y: overlap_red(x, y), diff_xy, seg_xy[2])),
-                   out_yx[0],
+                   #out_yx[0],
                    #seg_yx[0],
-                   out_yx[2],
+                   #out_yx[2],
                    #seg_yx[2],
-                   diff_yx,
-                   list(map(lambda x, y: overlap_red(x, y), diff_yx, seg_yx[2])),
+                   #diff_yx,
+                   #list(map(lambda x, y: overlap_red(x, y), diff_yx, seg_yx[2])),
                    #list(map(lambda x, y: overlap_red(x, y), list_ori_norm[0], list_seg[0])),
                    #list_ori[1],
                    #list(map(lambda x, y: overlap_red(x, y), list_ori_norm[1], list_seg[1])),
@@ -207,5 +206,5 @@ for epoch in opt.nepochs:
 
 # CUDA_VISIBLE_DEVICES=0 python test.py --dataset pain --nepochs 0 910 10 --nalpha 0 100 2  --prj Try3descarG --direction a_b --resize 286
 
-# CUDA_VISIBLE_DEVICES=0 python test.py --dataset pain --nepochs 100 110 10 --nalpha 0 100 11  --prj NS2AttG --direction a_b --resize 286
+# CUDA_VISIBLE_DEVICES=0 python test.py --dataset pain --nepochs 00 200 10 --nalpha 0 100 2  --prj TryAgain --direction a_b --resize 286
 

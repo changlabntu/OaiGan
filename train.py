@@ -38,10 +38,9 @@ parser.add_argument('--lr_decay_iters', type=int, default=50, help='multiply by 
 parser.add_argument('--beta1', type=float, default=0.5, help='beta1 for adam. default=0.5')
 parser.add_argument('--threads', type=int, default=4, help='number of threads for data loader to use')
 parser.add_argument('--seed', type=int, default=123, help='random seed to use. Default=123')
+# Loss
 parser.add_argument('--lamb', type=int, default=100, help='weight on L1 term in objective')
-parser.add_argument('--lamb_b', type=int, default=0, help='weight on L1 term in objective')
-parser.add_argument('--lseg', type=int, default=0, help='weight on segmentation loss in objective')
-# misc
+# Misc
 parser.add_argument('--legacy', action='store_true', dest='legacy', default=False, help='legacy pytorch')
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
@@ -52,7 +51,7 @@ parser = Pix2PixModel.add_model_specific_args(parser)
 
 # Finalize Arguments
 opt = parser.parse_args()
-shutil.copy('engine/pix2pix.py', 'logs/' + opt.prj + '.py')
+shutil.copy('engine/pix2pix.py', 'notinuse/logs/' + opt.prj + '.py')
 opt.prj = opt.dataset + '_' + opt.prj
 opt.not_tracking_hparams = ['mode', 'port', 'epoch_load', 'legacy', 'threads', 'test_batch_size']
 print(opt)
@@ -90,23 +89,7 @@ else:
     net.module.overall_loop()
 
 # USAGE
-# CUDA_VISIBLE_DEVICES=1 python train.py --dataset TSE_DESS -b 16 --prj NoResampleResnet6 --direction a_b --netG resnet_6blocks
-# CUDA_VISIBLE_DEVICES=0 python train.py --dataset painfull -b 23 --prj patch16 --lseg 0 --direction aregis1_b
-# CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 1 --prj bysubject --lseg 0 --direction aregis1_b --bysubject
-# CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj check --lseg 0 --direction aregis1_b
-# CUDA_VISIBLE_DEVICES=0 python train.py --dataset pain -b 16 --prj Attv1_2 --lseg 0 --direction aregis1_b --netG Attv1_2
-
-# CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj AttUNet_patch4 --lseg 0 --direction aregis1_b --netG AttUNet --netD patchgan_4
-
-# CUDA_VISIBLE_DEVICES=0 python train.py --dataset pain -b 1 --prj bysubjectattgan --direction aregis1_b --bysubject --resize 286
-
-
-#CUDA_VISIBLE_DEVICES=1 python train.py --dataset painfull -b 6 --prj atttestpix --direction aregis1_b --bysubject --resize 286
-
-#CUDA_VISIBLE_DEVICES=0 python train.py --dataset painfull -b 3 --prj attganMixY0Y1Y --direction aregis1_b --bysubject --resize 286 --netG attgan
-
-#CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj TryAgain --direction aregis1_b --resize 286
-
-#CUDA_VISIBLE_DEVICES=0 python train.py --dataset painfull384 -b 16 --prj NS2AttG384 --direction a_b --netG attgan
+# CUDA_VISIBLE_DEVICES=0 python train.py --dataset painfull384 -b 16 --prj NS2AttG384 --direction a_b --netG attgan
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj TryAgain --direction aregis1_b --resize 286 --netG attgan
 
 
