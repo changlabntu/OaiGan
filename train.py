@@ -10,6 +10,7 @@ load_dotenv('.env')
 parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
 # Project name
 parser.add_argument('--prj', type=str, default='', help='name of the project')
+parser.add_argument('--engine', dest='engine', type=str, default='mydcgan', help='use which engine')
 # Data
 parser.add_argument('--dataset', type=str, default='pain')
 parser.add_argument('--bysubject', action='store_true', dest='bysubject', default=False)
@@ -46,12 +47,12 @@ parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
 
 # Model-specific Arguments
-from engine.pix2pix import Pix2PixModel
-parser = Pix2PixModel.add_model_specific_args(parser)
+GAN = getattr(__import__('engine.' + parser.parse_args().engine), parser.parse_args().engine).GAN
+parser = GAN.add_model_specific_args(parser)
 
 # Finalize Arguments
 opt = parser.parse_args()
-shutil.copy('engine/pix2pix.py', 'notinuse/logs/' + opt.prj + '.py')
+#shutil.copy('engine/pix2pix.py', 'notinuse/logs/' + opt.prj + '.py')
 opt.prj = opt.dataset + '_' + opt.prj
 opt.not_tracking_hparams = ['mode', 'port', 'epoch_load', 'legacy', 'threads', 'test_batch_size']
 print(opt)
@@ -70,26 +71,24 @@ test_loader = DataLoader(dataset=test_set, num_workers=opt.threads, batch_size=o
 
 #  Model
 if not opt.legacy:
-    from engine.pix2pix import Pix2PixModel
     import pytorch_lightning as pl
     from pytorch_lightning import loggers as pl_loggers
     logger = pl_loggers.TensorBoardLogger(os.environ.get('LOGS'))
-    net = Pix2PixModel(hparams=opt, train_loader=None,
-                       test_loader=None, checkpoints=os.environ.get('CHECKPOINTS'))
+    net = GAN(hparams=opt, train_loader=None,
+              test_loader=None, checkpoints=os.environ.get('CHECKPOINTS'))
     print(net.hparams)
     trainer = pl.Trainer(gpus=[0],  # distributed_backend='ddp',
                          max_epochs=opt.n_epochs, progress_bar_refresh_rate=20, logger=logger)
     trainer.fit(net, train_loader, test_loader)
 else:
-    from engine.pix2pix import Pix2PixModel
-    net = Pix2PixModel(hparams=opt, train_loader=train_loader,
-                       test_loader=test_loader, checkpoints=os.environ.get('CHECKPOINTS'))
+    net = GAN(hparams=opt, train_loader=train_loader,
+              test_loader=test_loader, checkpoints=os.environ.get('CHECKPOINTS'))
     net = net.cuda()
     net = nn.DataParallel(net)
     net.module.overall_loop()
 
 # USAGE
 # CUDA_VISIBLE_DEVICES=0 python train.py --dataset painfull384 -b 16 --prj NS2AttG384 --direction a_b --netG attgan
-# CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj TryAgain --direction aregis1_b --resize 286 --netG attgan
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj TryAgain --direction aregis1_b --resize 286
 
 

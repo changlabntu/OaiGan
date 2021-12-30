@@ -150,6 +150,12 @@ class BaseModel(pl.LightningModule):
         self.optimizer_d = optim.Adam(self.net_d.parameters(), lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
         return [self.optimizer_d, self.optimizer_g], []
 
+    @staticmethod
+    def add_model_specific_args(parent_parser):
+        parser = parent_parser.add_argument_group("LitModel")
+        parser.add_argument("--n_attrs", type=int, default=1)
+        return parent_parser
+
     def add_loss_adv(self, a, b, net_d, loss, coeff, truth, log=None, stacked=False):
         if stacked:
             fake_in = torch.cat((a, b), 1)

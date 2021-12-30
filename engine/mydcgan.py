@@ -14,7 +14,7 @@ from utils.data_utils import *
 from engine.base import BaseModel
 
 
-class Pix2PixModel(BaseModel):
+class GAN(BaseModel):
     """
     There is a lot of patterned noise and other failures when using lightning
     """

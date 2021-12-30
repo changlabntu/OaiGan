@@ -2,7 +2,7 @@ from engine.base import BaseModel
 import copy
 
 
-class Pix2PixModel(BaseModel):
+class GAN(BaseModel):
     """
     There is a lot of patterned noise and other failures when using lightning
     """
@@ -33,7 +33,7 @@ class Pix2PixModel(BaseModel):
         self.imgXYX = self.netg_YX(self.imgXY)[0]
         self.imgYXY = self.netg_XY(self.imgYX)[0]
 
-        if self.hparams.lamb > 0:
+        if self.hparams.lambI > 0:
             self.idt_X = self.net_gYX(oriX)[0]
             self.idt_Y = self.net_gXY(oriY)[0]
 
@@ -50,28 +50,24 @@ class Pix2PixModel(BaseModel):
         loss_g = self.add_loss_L1(a=self.imgYXY, b=self.oriY, loss=loss_g, coeff=self.hparams.lamb)
 
         # Identity(idt_X, X)
-        if self.hparams.lamb > 0:
-            loss_g = self.add_loss_L1(a=self.idt_X, b=self.oriX, loss=loss_g, coeff=self.hparams.lamb)
+        if self.hparams.lambI > 0:
+            loss_g = self.add_loss_L1(a=self.idt_X, b=self.oriX, loss=loss_g, coeff=self.hparams.lambI)
             # Identity(idt_Y, Y)
-            loss_g = self.add_loss_L1(a=self.idt_Y, b=self.oriY, loss=loss_g, coeff=self.hparams.lamb)
+            loss_g = self.add_loss_L1(a=self.idt_Y, b=self.oriY, loss=loss_g, coeff=self.hparams.lambI)
 
         return loss_g
 
     def backward_d(self, inputs):
         loss_d = 0
-        # ADV(XY, Y)+
+        # ADV(XY, Y)-
         loss_d = self.add_loss_adv(a=self.imgXY, b=self.oriY, loss=loss_d, coeff=1, truth=False, stacked=False)
-        # ADV(YX, X)+
+        # ADV(YX, X)-
         loss_d = self.add_loss_adv(a=self.imgYX, b=self.oriX, loss=loss_d, coeff=1, truth=False, stacked=False)
 
-        # ADV(XY, Y)+
+        # ADV(XY, Y)-
         loss_d = self.add_loss_adv(a=self.oriY, b=self.oriY, loss=loss_d, coeff=1, truth=False, stacked=False)
-        # ADV(YX, X)+
+        # ADV(YX, X)-
         loss_d = self.add_loss_adv(a=self.oriX, b=self.oriX, loss=loss_d, coeff=1, truth=False, stacked=False)
 
-        # Cyclic(XYX, X)+
-        loss_d = self.add_loss_adv(a=self.imgXYX, b=self.oriX, loss=loss_d, coeff=1, truth=False, stacked=True)
-        # Cyclic(YXY, Y)+
-        loss_d = self.add_loss_adv(a=self.imgYXY, b=self.oriY, loss=loss_d, coeff=1, truth=False, stacked=True)
         return loss_d
 

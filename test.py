@@ -207,4 +207,3 @@ for epoch in opt.nepochs:
 # CUDA_VISIBLE_DEVICES=0 python test.py --dataset pain --nepochs 0 910 10 --nalpha 0 100 2  --prj Try3descarG --direction a_b --resize 286
 
 # CUDA_VISIBLE_DEVICES=0 python test.py --dataset pain --nepochs 00 200 10 --nalpha 0 100 2  --prj TryAgain --direction a_b --resize 286
-
