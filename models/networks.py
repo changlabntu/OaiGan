@@ -427,7 +427,8 @@ class UnetSkipConnectionBlock(nn.Module):
             up = [uprelu, upconv, upnorm]
 
             if use_dropout:
-                model = down + [submodule] + up + [nn.Dropout(0.5)]
+                # I added dropout in the downstram path
+                model = down + [nn.Dropout(0.5)] + [submodule] + up + [nn.Dropout(0.5)]
             else:
                 model = down + [submodule] + up
 
@@ -522,7 +523,7 @@ class PixelDiscriminator(nn.Module):
 
 if __name__ == '__main__':
     g = UnetGenerator(input_nc=3, output_nc=3, num_downs=8, ngf=64, norm_layer=nn.BatchNorm2d,
-                                    use_dropout=False).cuda()
+                                    use_dropout=True).cuda()
    #from torchsummary import summary
     from utils.data_utils import print_num_of_parameters
     print_num_of_parameters(g)

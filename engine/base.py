@@ -87,7 +87,7 @@ class BaseModel(pl.LightningModule):
         else:
             self.net_g = define_G(input_nc=self.hparams.input_nc, output_nc=self.hparams.output_nc,
                                   ngf=self.hparams.ngf, netG=self.hparams.netG,
-                                  norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[])
+                                  norm='batch', use_dropout=self.hparams.mc, init_type='normal', init_gain=0.02, gpu_ids=[])
             self.net_g_inc = 0
 
         # DISCRIMINATOR

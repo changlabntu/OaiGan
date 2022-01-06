@@ -16,6 +16,7 @@ load_dotenv('.env')
 def get_model(epochs, name, dir_checkpoints, device):
     model_path = dir_checkpoints + "{}/{}_model_epoch_{}.pth".format(opt.prj, name, epochs)
     net = torch.load(model_path).to(device)
+    #net.eval()
     return net
 
 
@@ -157,13 +158,12 @@ for epoch in opt.nepochs:
         diff_yx[0][0, 0, 0] = 2
         diff_yx[0][0, 0, 1] = -2
 
-        to_show = [out_xy[0],
-                   list(map(lambda x, y: overlap_red(x, y), out_xy[0], seg_xy[0])),
-                   #seg_xy[0],
-                   out_xy[2],
-                   #seg_xy[2],
-                   diff_xy,
-                   list(map(lambda x, y: overlap_red(x, y), diff_xy, seg_xy[2])),
+        to_show = [#out_xy[0],
+                   #list(map(lambda x, y: overlap_red(x, y), out_xy[0], seg_xy[0])),
+                   #out_xy[2],
+                   #diff_xy,
+                   #list(map(lambda x, y: overlap_red(x, y), diff_xy, seg_xy[2])),
+                   seg_xy[2],
                    #out_yx[0],
                    #seg_yx[0],
                    #out_yx[2],
@@ -207,3 +207,11 @@ for epoch in opt.nepochs:
 # CUDA_VISIBLE_DEVICES=0 python test.py --dataset pain --nepochs 0 910 10 --nalpha 0 100 2  --prj Try3descarG --direction a_b --resize 286
 
 # CUDA_VISIBLE_DEVICES=0 python test.py --dataset pain --nepochs 00 200 10 --nalpha 0 100 2  --prj TryAgain --direction a_b --resize 286
+
+if 0:
+    xs  = sorted(glob.glob('result/pain_NS4mc/*'))
+    imgs = []
+    for x in xs:
+        img = np.array(Image.open(x))[:, :, :1]
+        imgs.append(img)
+    imgs = np.concatenate(imgs, 2)

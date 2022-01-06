@@ -21,6 +21,7 @@ parser.add_argument('--resize', type=int, default=0)
 parser.add_argument('--res', action='store_true', dest='res', default=False, help='residual generator')
 parser.add_argument('--gan_mode', type=str, default='vanilla', help='gan mode')
 parser.add_argument('--netG', type=str, default='unet_256', help='netG model')
+parser.add_argument('--mc', action='store_true', dest='mc', default=False, help='monte carlo dropout for generator')
 parser.add_argument('--netD', type=str, default='patchgan_16', help='netD model')
 parser.add_argument('--input_nc', type=int, default=3, help='input image channels')
 parser.add_argument('--output_nc', type=int, default=3, help='output image channels')
@@ -52,10 +53,14 @@ parser = GAN.add_model_specific_args(parser)
 
 # Finalize Arguments
 opt = parser.parse_args()
-#shutil.copy('engine/pix2pix.py', 'notinuse/logs/' + opt.prj + '.py')
+shutil.copy('engine/' + opt.engine + '.py', 'notinuse/logs/' + opt.prj + '.py')
 opt.prj = opt.dataset + '_' + opt.prj
 opt.not_tracking_hparams = ['mode', 'port', 'epoch_load', 'legacy', 'threads', 'test_batch_size']
 print(opt)
+
+from utils.make_config import *
+write_config('example.ini', vars(opt))
+
 
 #  Dataset
 if opt.bysubject:
