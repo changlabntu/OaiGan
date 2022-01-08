@@ -8,7 +8,6 @@ class GAN(BaseModel):
     """
     def __init__(self, hparams, train_loader, test_loader, checkpoints):
         BaseModel.__init__(self, hparams, train_loader, test_loader, checkpoints)
-        print('using pix2pix.py')
 
         self.net_gXY = self.net_g
         self.net_gYX = copy.deepcopy(self.net_g)
@@ -16,11 +15,15 @@ class GAN(BaseModel):
         self.net_dX = self.net_d
         self.net_dY = copy.deepcopy(self.net_d)
 
+        # save model names
+        self.netg_names = {'net_gXY': 'netGXY', 'net_gYX': 'netGYX'}
+        self.netd_names = {'net_dX': 'netDX', 'net_dY': 'netDY'}
+
     @staticmethod
     def add_model_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("LitModel")
         # coefficient for the identify loss
-        parser.add_argument("--lambI", type=int, default=0)
+        parser.add_argument("--lambI", type=int, default=0.5)
         return parent_parser
 
     def generation(self):
@@ -30,8 +33,8 @@ class GAN(BaseModel):
         self.imgXY = self.net_gXY(oriX)[0]
         self.imgYX = self.net_gYX(oriY)[0]
 
-        self.imgXYX = self.netg_YX(self.imgXY)[0]
-        self.imgYXY = self.netg_XY(self.imgYX)[0]
+        self.imgXYX = self.net_gYX(self.imgXY)[0]
+        self.imgYXY = self.net_gXY(self.imgYX)[0]
 
         if self.hparams.lambI > 0:
             self.idt_X = self.net_gYX(oriX)[0]
@@ -59,15 +62,17 @@ class GAN(BaseModel):
 
     def backward_d(self, inputs):
         loss_d = 0
-        # ADV(XY, Y)-
-        loss_d = self.add_loss_adv(a=self.imgXY, b=self.oriY, loss=loss_d, coeff=1, truth=False, stacked=False)
-        # ADV(YX, X)-
-        loss_d = self.add_loss_adv(a=self.imgYX, b=self.oriX, loss=loss_d, coeff=1, truth=False, stacked=False)
+        # ADV(XY)-
+        loss_d = self.add_loss_adv(a=self.imgXY, net_d=self.net_dY, loss=loss_d, coeff=1, truth=False, stacked=False)
 
-        # ADV(XY, Y)-
-        loss_d = self.add_loss_adv(a=self.oriY, b=self.oriY, loss=loss_d, coeff=1, truth=False, stacked=False)
-        # ADV(YX, X)-
-        loss_d = self.add_loss_adv(a=self.oriX, b=self.oriX, loss=loss_d, coeff=1, truth=False, stacked=False)
+        # ADV(YX)-
+        loss_d = self.add_loss_adv(a=self.imgYX, net_d=self.net_dX, loss=loss_d, coeff=1, truth=False, stacked=False)
+
+        # ADV(Y)+
+        loss_d = self.add_loss_adv(a=self.oriY, net_d=self.net_dY, loss=loss_d, coeff=1, truth=True, stacked=False)
+
+        # ADV(X)+
+        loss_d = self.add_loss_adv(a=self.oriX, net_d=self.net_dX, loss=loss_d, coeff=1, truth=True, stacked=False)
 
         return loss_d
 

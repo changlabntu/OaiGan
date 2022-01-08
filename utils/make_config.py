@@ -19,3 +19,27 @@ def read_config(name):
         opt[k] = v
     opt = argparse.Namespace(**opt)
     return opt
+
+
+import argparse
+import json
+
+
+def load_json(name):
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--mode', type=str, default='dummy')
+    parser.add_argument('--port', type=str, default='dummy')
+    with open(name, 'rt') as f:
+        t_args = argparse.Namespace()
+        t_args.__dict__.update(json.load(f))
+        args = parser.parse_args(namespace=t_args)
+    return args
+
+
+def save_json(args, name):
+    with open(name, 'wt') as f:
+        json.dump(vars(args), f, indent=4)
+
+
+if __name__ == '__main__':
+    x = read_config('outputs/default.ini')

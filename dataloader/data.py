@@ -83,22 +83,32 @@ class DatasetFromFolderSubjects(data.Dataset):
 
 
 class DatasetFromFolder(data.Dataset):
-    def __init__(self, image_dir, opt, mode):
+    def __init__(self, image_dir, opt, mode, unpaired=False):
         super(DatasetFromFolder, self).__init__()
         self.opt = opt
         self.mode = mode
         self.a_path = join(image_dir, self.opt.direction.split('_')[0])
         self.b_path = join(image_dir, self.opt.direction.split('_')[1])
         self.image = sorted([x.split('/')[-1] for x in glob.glob(self.a_path+'/*')])
+
         self.resize = opt.resize
         self.seg_model = torch.load(os.environ.get('model_seg')).cuda()
+        self.unpaired = unpaired
+
+        if self.unpaired:
+            self.image_b = [x.split('/')[-1] for x in glob.glob(self.b_path + '/*')]
+            random.shuffle(self.image_b)
 
     def __len__(self):
         return len(self.image)
 
     def __getitem__(self, index):
         a = Image.open(join(self.a_path, self.image[index]))  #.convert('RGB') (DESS: 294>286) (PAIN: 224>286)
-        b = Image.open(join(self.b_path, self.image[index]))  #.convert('RGB')
+        if not self.unpaired:
+            b = Image.open(join(self.b_path, self.image[index]))  #.convert('RGB')
+        else:
+            b = Image.open(join(self.b_path, self.image_b[index]))
+
         if self.resize != 0:
             a = a.resize((self.resize, self.resize), Image.BICUBIC)  # 444 > 286
             b = b.resize((self.resize, self.resize), Image.BICUBIC)

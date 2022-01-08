@@ -60,8 +60,11 @@ class BaseModel(pl.LightningModule):
         # initialize
         self.tini = time.time()
         self.epoch = 0
-        self.avg_psnr = 0
         self.dir_checkpoints = checkpoints
+
+        # save model names
+        self.netg_names = {'net_g': 'netG'}
+        self.netd_names = {'net_d': 'netD'}
 
         # hyperparameters
         hparams = {x: vars(hparams)[x] for x in vars(hparams).keys() if x not in hparams.not_tracking_hparams}
@@ -76,6 +79,12 @@ class BaseModel(pl.LightningModule):
         if self.hparams.netG == 'attgan':
             from models.AttGAN.attgan import Generator
             print('use attgan discriminator')
+            self.net_g = Generator(enc_dim=self.hparams.ngf, dec_dim=self.hparams.ngf,
+                                   n_attrs=self.hparams.n_attrs, img_size=256)
+            self.net_g_inc = 1
+        elif self.hparams.netG == 'myattgan':
+            from models.AttGAN.attgan import Generator
+            print('use myattgan discriminator')
             self.net_g = Generator(enc_dim=self.hparams.ngf, dec_dim=self.hparams.ngf,
                                    n_attrs=self.hparams.n_attrs, img_size=256)
             self.net_g_inc = 1
@@ -145,9 +154,19 @@ class BaseModel(pl.LightningModule):
         print(print_num_of_parameters(self.net_g))
 
     def configure_optimizers(self):
-        self.optimizer_g = optim.Adam(list(self.net_g.parameters()) + list(self.classifier.parameters()),
-                                      lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
-        self.optimizer_d = optim.Adam(self.net_d.parameters(), lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
+        #self.optimizer_g = optim.Adam(list(self.net_gXY.parameters()) + list(self.classifier.parameters()),
+        #                              lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
+        #self.optimizer_d = optim.Adam(self.net_d.parameters(), lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
+        netg_parameters = []
+        for g in self.netg_names.keys():
+            netg_parameters = netg_parameters + list(getattr(self, g).parameters())
+
+        netd_parameters = []
+        for d in self.netd_names.keys():
+            netd_parameters = netd_parameters + list(getattr(self, d).parameters())
+
+        self.optimizer_g = optim.Adam(netg_parameters, lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
+        self.optimizer_d = optim.Adam(netd_parameters, lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
         return [self.optimizer_d, self.optimizer_g], []
 
     @staticmethod
@@ -156,7 +175,7 @@ class BaseModel(pl.LightningModule):
         parser.add_argument("--n_attrs", type=int, default=1)
         return parent_parser
 
-    def add_loss_adv(self, a, b, net_d, loss, coeff, truth, log=None, stacked=False):
+    def add_loss_adv(self, a, net_d, loss, coeff, truth, b=None, log=None, stacked=False):
         if stacked:
             fake_in = torch.cat((a, b), 1)
         else:
@@ -186,18 +205,12 @@ class BaseModel(pl.LightningModule):
             self.oriY = self.oriY.view(B * S, C, H, W)
 
         if optimizer_idx == 0:
-            #for param in self.net_d.parameters():`
-            #    param.requires_grad = True
-            self.net_d.zero_grad()
             imgs = self.generation()
             loss_d = self.backward_d(imgs)
             self.log('loss_d', loss_d, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
             return loss_d
 
         if optimizer_idx == 1:
-            #for param in self.net_d.parameters():
-            #    param.requires_grad = False
-            self.net_g.zero_grad()
             imgs = self.generation()
             loss_g = self.backward_g(imgs)
             self.log('loss_g', loss_g, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
@@ -214,15 +227,14 @@ class BaseModel(pl.LightningModule):
                 os.mkdir(dir_checkpoints)
             if not os.path.exists(os.path.join(dir_checkpoints, hparams.prj)):
                 os.mkdir(os.path.join(dir_checkpoints, hparams.prj))
-            net_g_model_out_path = dir_checkpoints + "/{}/netG_model_epoch_{}.pth".format(hparams.prj, self.epoch)
-            net_d_model_out_path = dir_checkpoints + "/{}/netD_model_epoch_{}.pth".format(hparams.prj, self.epoch)
-            torch.save(self.net_g, net_g_model_out_path)
-            torch.save(self.net_d, net_d_model_out_path)
-            print("Checkpoint saved to {}".format(dir_checkpoints + '/' + hparams.prj))
+
+            for name in self.netg_names.keys():
+                path = dir_checkpoints + ('/{}/' + self.netg_names[name] + '_model_epoch_{}.pth').format(hparams.prj, self.epoch)
+                torch.save(getattr(self, name), path)
+                print("Checkpoint saved to {}".format(dir_checkpoints + '/' + hparams.prj))
 
         self.epoch += 1
         self.tini = time.time()
-        self.avg_psnr = 0
 
     def generation(self):
         return 0

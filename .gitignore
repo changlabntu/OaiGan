@@ -12,6 +12,7 @@ __pycache__/
 dataset/
 logs/
 logs2/
+outputs/results/
 result/
 Untitled/
 notinuse/
