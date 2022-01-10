@@ -12,16 +12,6 @@ from utils.data_utils import norm_01
 load_dotenv('.env')
 
 
-def get_model(epochs, name, dir_checkpoints, device, eval=False):
-    model_path = dir_checkpoints + "{}/{}_model_epoch_{}.pth".format(args.prj, name, epochs)
-    net = torch.load(model_path).to(device)
-    if eval:
-        net.eval()
-    else:
-        net.train()
-    return net
-
-
 def overlap_red(x0, y0):
     y = 1 * y0
     x = 1 * x0
@@ -45,6 +35,7 @@ def overlap_red(x0, y0):
 class Pix2PixModel:
     def __init__(self, args):
         self.args = args
+        self.net_g = None
         self.dir_checkpoints = os.environ.get('CHECKPOINTS')
         from dataloader.data import DatasetFromFolder as Dataset
 
@@ -60,10 +51,18 @@ class Pix2PixModel:
 
         self.device = torch.device("cuda:0")
 
-    def get_one_output(self, i, xy, alpha=None):
-        x = self.test_set.__getitem__(i)
+    def get_model(self, epoch, eval=False):
+        model_path = self.dir_checkpoints + "{}/{}_model_epoch_{}.pth".format(args.prj, self.args.netg, epoch)
+        net = torch.load(model_path).to(self.device)
+        if eval:
+            net.eval()
+        else:
+            net.train()
+        self.net_g = net
 
-        # model
+    def get_one_output(self, i, xy, alpha=None):
+        # inputs
+        x = self.test_set.__getitem__(i)
         oriX = x[0].unsqueeze(0).to(self.device)
         oriY = x[1].unsqueeze(0).to(self.device)
 
@@ -131,7 +130,7 @@ args.prj = args.dataset + '_' + args.prj
 
 test_unit = Pix2PixModel(args=args)
 for epoch in range(*args.nepochs):
-    test_unit.net_g = get_model(epoch, args.netg, test_unit.dir_checkpoints, test_unit.device, eval=args.eval)
+    test_unit.get_model(epoch, eval=args.eval)
     for alpha in np.linspace(*args.nalpha):
         out_xy = list(map(lambda v: test_unit.get_one_output(v, 'x', alpha), args.irange))
         out_yx = list(map(lambda v: test_unit.get_one_output(v, 'y', alpha), args.irange))

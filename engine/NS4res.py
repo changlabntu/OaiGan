@@ -24,10 +24,8 @@ class GAN(BaseModel):
 
     def generation(self):
         oriX = self.oriX
-        self.imgX0 = self.net_g(oriX, a=torch.zeros(oriX.shape[0], self.net_g_inc).cuda())[0]
-        self.imgX1 = self.net_g(oriX, a=torch.ones(oriX.shape[0], self.net_g_inc).cuda())[0]
-        #self.imgX0 = self.net_g(oriX)[0]
-        #self.imgX1 = self.net_g(oriX)[0]
+        self.imgX0 = self.net_g(oriX, a=torch.zeros(oriX.shape[0], self.net_g_inc).cuda())[0] + oriX
+        self.imgX1 = self.net_g(oriX, a=torch.ones(oriX.shape[0], self.net_g_inc).cuda())[0] + oriX
 
     def backward_g(self, inputs):
         # ADV(X0)+
@@ -37,8 +35,9 @@ class GAN(BaseModel):
         # L1(X0, Y)
         loss_g = self.add_loss_L1(a=self.imgX0, b=self.oriY, loss=loss_g, coeff=self.hparams.lamb)
 
-        # ADV(X1)+
-        loss_g = self.add_loss_adv(a=self.imgX1, b=None, net_d=self.net_d, loss=loss_g, coeff=1, truth=True, stacked=False)
+        # L1(X1, X)
+        loss_g = self.add_loss_L1(a=self.imgX1, b=self.oriX, loss=loss_g, coeff=self.hparams.lamb * 10)
+
         return loss_g
 
     def backward_d(self, inputs):
@@ -49,7 +48,5 @@ class GAN(BaseModel):
         # ADV(Y)+
         loss_d = self.add_loss_adv(a=self.oriY, b=None, net_d=self.net_d, loss=loss_d, coeff=0.5, truth=True)
 
-        # ADV(X1)-
-        loss_d = self.add_loss_adv(a=self.imgX1, b=None, net_d=self.net_d, loss=loss_d, coeff=0.25, truth=False, stacked=False)
         return loss_d
 

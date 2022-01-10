@@ -100,7 +100,7 @@ class BaseModel(pl.LightningModule):
             self.net_g_inc = 0
 
         # DISCRIMINATOR
-        # patchgan
+        # Patchgan from cyclegan (pix2pix one is strange)
         if (self.hparams.netD).startswith('patchgan'):
             from models.cyclegan.models import Discriminator
             self.net_d = Discriminator(input_shape=(6, 256, 256), patch=(self.hparams.netD).split('_')[-1])
@@ -124,34 +124,34 @@ class BaseModel(pl.LightningModule):
         else:
             self.net_d = define_D(input_nc=self.hparams.output_nc * 2, ndf=64, netD=self.hparams.netD)
 
-        # INIT
+        # Init. Network Parameters
         self.net_g = self.net_g.apply(_weights_init)
         if self.hparams.netD == 'sagan':
             print('not init for netD of sagan')
         else:
             self.net_d = self.net_d.apply(_weights_init)
 
+        # In case you need a classifier
         self.classifier = MRPretrained()
-        self.CELoss = CrossEntropyLoss()
-
         self.seg_model = torch.load(os.environ.get('model_seg')).cuda()
 
+        # Optimizer and scheduler
         [self.optimizer_d, self.optimizer_g], [] = self.configure_optimizers()
         self.net_g_scheduler = get_scheduler(self.optimizer_g, self.hparams)
         self.net_d_scheduler = get_scheduler(self.optimizer_d, self.hparams)
 
-        # Define Loss Funtnios
+        # Define Loss Functions
+        self.CELoss = CrossEntropyLoss()
         self.criterionL1 = nn.L1Loss().cuda()
         if self.hparams.gan_mode == 'vanilla':
             self.criterionGAN = nn.BCEWithLogitsLoss()
         else:
             self.criterionGAN = GANLoss(self.hparams.gan_mode).cuda()
-
         self.segLoss = SegmentationCrossEntropyLoss()
 
         # Final
-        self.hparams.update(vars(self.hparams))
-        print(print_num_of_parameters(self.net_g))
+        self.hparams.update(vars(self.hparams))   # updated hparams to be logged in tensorboard
+        print(print_num_of_parameters(self.net_g))  # number of trainable parameters
 
     def configure_optimizers(self):
         #self.optimizer_g = optim.Adam(list(self.net_gXY.parameters()) + list(self.classifier.parameters()),

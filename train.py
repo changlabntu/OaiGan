@@ -40,6 +40,8 @@ parser.add_argument('--epoch_count', type=int, default=0, help='the starting epo
 parser.add_argument('--epoch_load', type=int, default=0, help='to load checkpoint form the epoch count')
 parser.add_argument('--n_epochs_decay', type=int, default=100, help='# of iter to linearly decay learning rate to zero')
 parser.add_argument('--lr_policy', type=str, default='lambda', help='learning rate policy: lambda|step|plateau|cosine')
+parser.add_argument('--lr_decay_iters', type=int, default=50, help='multiply by a gamma every lr_decay_iters iterations')
+
 # Loss
 parser.add_argument('--lamb', type=int, default=100, help='weight on L1 term in objective')
 # Misc
@@ -47,21 +49,16 @@ parser.add_argument('--legacy', action='store_true', dest='legacy', default=Fals
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
 
-#parser.add_argument('--res', action='store_true', dest='res', default=False, help='residual generator')
-#parser.add_argument('--lr_decay_iters', type=int, default=50, help='multiply by a gamma every lr_decay_iters iterations')
-
 # Model-specific Arguments
 GAN = getattr(__import__('engine.' + parser.parse_args().engine), parser.parse_args().engine).GAN
 parser = GAN.add_model_specific_args(parser)
 
 # Finalize Arguments
 opt = parser.parse_args()
-shutil.copy('engine/' + opt.engine + '.py', 'notinuse/logs/' + opt.prj + '.py')
 opt.prj = opt.dataset + '_' + opt.prj
 opt.not_tracking_hparams = ['mode', 'port', 'epoch_load', 'legacy', 'threads', 'test_batch_size']
-save_json(opt, os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '.json')
-print('Print Arguments')
-print(opt)
+save_json(opt, os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/' + opt.prj + '.json')
+shutil.copy('engine/' + opt.engine + '.py', os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/' + opt.engine + '.py')
 
 #  Define Dataset Class
 if opt.bysubject:
@@ -85,7 +82,7 @@ net = GAN(hparams=opt, train_loader=None,
           test_loader=None, checkpoints=os.environ.get('CHECKPOINTS'))
 trainer = pl.Trainer(gpus=[0],  # distributed_backend='ddp',
                      max_epochs=opt.n_epochs, progress_bar_refresh_rate=20, logger=logger)
-trainer.fit(net, train_loader, test_loader)
+trainer.fit(net, train_loader)#, test_loader)  # test loader not used for now
 
 
 # USAGE
