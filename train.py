@@ -67,11 +67,14 @@ else:
     from dataloader.data import DatasetFromFolder as Dataset
 
 # Load Dataset and DataLoader
-train_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/train/', opt, mode='train', unpaired=opt.unpaired)
-test_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/test/', opt, mode='test', unpaired=opt.unpaired)
+#train_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/train/', opt, mode='train', unpaired=opt.unpaired)
+#test_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/test/', opt, mode='test', unpaired=opt.unpaired)
+
+train_set = Dataset(path_a=os.environ.get('DATASET') + opt.dataset + '/train/' + opt.direction.split('_')[0] + '/',
+                    path_b=os.environ.get('DATASET') + opt.dataset + '/train/' + opt.direction.split('_')[1] + '/',
+                    opt=opt, mode='train', unpaired=opt.unpaired)
 
 train_loader = DataLoader(dataset=train_set, num_workers=opt.threads, batch_size=opt.batch_size, shuffle=True)
-test_loader = DataLoader(dataset=test_set, num_workers=opt.threads, batch_size=opt.test_batch_size, shuffle=False)
 
 #  Pytorch Lightning Model
 import pytorch_lightning as pl
@@ -82,11 +85,11 @@ net = GAN(hparams=opt, train_loader=None,
           test_loader=None, checkpoints=os.environ.get('CHECKPOINTS'))
 trainer = pl.Trainer(gpus=[0],  # distributed_backend='ddp',
                      max_epochs=opt.n_epochs, progress_bar_refresh_rate=20, logger=logger)
-trainer.fit(net, train_loader)#, test_loader)  # test loader not used for now
+trainer.fit(net, train_loader)#, test_loader)  # test loader not used during training
 
 
 # USAGE
-# CUDA_VISIBLE_DEVICES=1 python train.py --dataset TSE_DESS -b 16 --prj VryCycle --direction a_b --resize 286 --engine cyclegan --lamb 10
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset TSE_DESS -b 16 --prj VryCycle --direction a_b --resize 286 --engine cyclegan --lamb 10 --unpaired
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj NS4_g_att_bs --direction aregis1_b --resize 286 --engine NS4 --netG attgan
-
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset fly0 -b 16 --prj FlyCycle --direction orgpatch2_flypatch --resize 286 --engine cyclegan --lamb 10 --unpaired
 

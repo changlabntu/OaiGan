@@ -40,9 +40,18 @@ class Pix2PixModel:
         from dataloader.data import DatasetFromFolder as Dataset
 
         if args.testset:
-            self.test_set = Dataset(os.environ.get('DATASET') + args.testset + '/test/', args, mode='test', unpaired=False)
+            self.test_set = Dataset(
+                path_a=os.environ.get('DATASET') + args.testset + '/test/' + args.direction.split('_')[0] + '/',
+                path_b=os.environ.get('DATASET') + args.testset + '/test/' + args.direction.split('_')[1] + '/',
+                opt=args, mode='test', unpaired=args.unpaired)
+
         else:
-            self.test_set = Dataset(os.environ.get('DATASET') + args.dataset + '/test/', args, mode='test', unpaired=False)
+            self.test_set = Dataset(
+                path_a=os.environ.get('DATASET') + args.dataset + '/test/' + args.direction.split('_')[0] + '/',
+                path_b=os.environ.get('DATASET') + args.dataset + '/test/' + args.direction.split('_')[1] + '/',
+                opt=args, mode='test', unpaired=args.unpaired)
+
+        print(len(self.test_set))
 
         os.makedirs(os.path.join("outputs/results", args.prj), exist_ok=True)
 
@@ -113,6 +122,7 @@ parser.add_argument('--dataset', help='name of training dataset')
 parser.add_argument('--testset', help='name of testing dataset if different than the training dataset')
 parser.add_argument('--prj', type=str, help='name of the project')
 parser.add_argument('--direction', type=str, help='a2b or b2a')
+parser.add_argument('--unpaired', action='store_true', dest='unpaired', default=False)
 parser.add_argument('--netg', type=str)
 parser.add_argument('--resize', type=int)
 parser.add_argument('--flip', action='store_true', dest='flip')
@@ -148,6 +158,9 @@ for epoch in range(*args.nepochs):
         diff_xy[0][0, 0, 1] = -2
         diff_yx[0][0, 0, 0] = 2
         diff_yx[0][0, 0, 1] = -2
+
+        # out_xy: [oriX, oriY, imgXY]
+        # out_yx: [oriY, oriX, imgYX]
 
         to_show = [out_xy[0],
                    list(map(lambda x, y: overlap_red(x, y), out_xy[0], seg_xy[0])),

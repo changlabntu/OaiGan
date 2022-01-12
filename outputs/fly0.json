@@ -1,0 +1,41 @@
+{
+    "ini": "fly0",
+    "dataset": "fly0",
+    "testset": "fly0/train/",
+    "unpaired": true,
+    "direction": "orgpatch2_flypatch",
+    "netg": "netGXY",
+    "resize": 286,
+    "irange": [
+        172,
+        173,
+        108,
+        149,
+        166,
+        372,
+        373,
+        508,
+        449,
+        466
+    ],
+    "flip": false,
+    "eval": false,
+    "nepochs": [
+        0,
+        10,
+        200
+    ],
+    "nalpha": [
+        0,
+        100,
+        1
+    ],
+    "show": [
+        "oriX",
+        "oriY",
+        "imgXY",
+        "diff_imgXY_oriX"
+    ],
+    "mode": "client",
+    "port": "45727"
+}
