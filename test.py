@@ -37,30 +37,23 @@ class Pix2PixModel:
         self.args = args
         self.net_g = None
         self.dir_checkpoints = os.environ.get('CHECKPOINTS')
-        from dataloader.data import DatasetFromFolder as Dataset
+        from dataloader.data_aug import DatasetFromFolder as Dataset
 
-        if args.testset:
-            self.test_set = Dataset(
-                path_a=os.environ.get('DATASET') + args.testset + '/test/' + args.direction.split('_')[0] + '/',
-                path_b=os.environ.get('DATASET') + args.testset + '/test/' + args.direction.split('_')[1] + '/',
-                opt=args, mode='test', unpaired=args.unpaired)
-
-        else:
-            self.test_set = Dataset(
-                path_a=os.environ.get('DATASET') + args.dataset + '/test/' + args.direction.split('_')[0] + '/',
-                path_b=os.environ.get('DATASET') + args.dataset + '/test/' + args.direction.split('_')[1] + '/',
-                opt=args, mode='test', unpaired=args.unpaired)
-
-        print(len(self.test_set))
+        self.test_set = Dataset(root=os.environ.get('DATASET') + args.dataset + '/train/',
+                                path=args.direction,
+                                opt=args, mode='test', unpaired=args.unpaired)
 
         os.makedirs(os.path.join("outputs/results", args.prj), exist_ok=True)
 
         self.seg_model = torch.load(os.environ.get('model_seg')).cuda()
         self.netg_t2d = torch.load(os.environ.get('model_t2d')).cuda()
 
+        #magic = torch.load('/media/ExtHDD01/checkpoints/FlySide_0/netGYX_model_epoch_200.pth')
+        self.magic = torch.load('/media/ExtHDD01/checkpoints/FlySide_FrontWO286/netG_model_epoch_170.pth').cuda()
+
         self.device = torch.device("cuda:0")
 
-    def get_model(self, epoch, eval=False):
+    def get_model(self,  epoch, eval=False):
         model_path = self.dir_checkpoints + "{}/{}_model_epoch_{}.pth".format(args.prj, self.args.netg, epoch)
         net = torch.load(model_path).to(self.device)
         if eval:
@@ -107,17 +100,23 @@ class Pix2PixModel:
         seg = torch.argmax(seg, 1)[0,::].detach().cpu()
         return seg
 
+    def get_magic(self, ori):
+        magic = self.magic(ori.cuda().unsqueeze(0))
+        magic = magic[0][0, 0, ::].detach().cpu()
+        return magic
+
     def get_all_seg(self, input, t2d=True):
-        if t2d:
-            input = list(map(lambda k: list(map(lambda v: self.get_t2d(v), k)), input))  # (3, 256, 256) (-1, 1)
-        list_norm = list(map(lambda k: list(map(lambda v: norm_01(v), k)), input))  # (3, 256, 256) (0, 1)
-        list_seg = list(map(lambda k: list(map(lambda v: self.get_seg(v), k)), list_norm))
+        #if t2d:
+        #    input = list(map(lambda k: list(map(lambda v: self.get_t2d(v), k)), input))  # (3, 256, 256) (-1, 1)
+        #list_norm = list(map(lambda k: list(map(lambda v: norm_01(v), k)), input))  # (3, 256, 256) (0, 1)
+        #list_seg = list(map(lambda k: list(map(lambda v: self.get_seg(v), k)), list_norm))
+        list_seg = list(map(lambda k: list(map(lambda v: self.get_magic(v), k)), input))
         return list_seg
 
 
 # Command Line Argument
 parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
-parser.add_argument('--jsn', type=str, default='default', help='name of ini file')
+parser.add_argument('--jsn', type=str, default='FlySideWnWp', help='name of ini file')
 parser.add_argument('--dataset', help='name of training dataset')
 parser.add_argument('--testset', help='name of testing dataset if different than the training dataset')
 parser.add_argument('--prj', type=str, help='name of the project')
@@ -127,7 +126,7 @@ parser.add_argument('--netg', type=str)
 parser.add_argument('--resize', type=int)
 parser.add_argument('--flip', action='store_true', dest='flip')
 parser.add_argument('--eval', action='store_true', dest='eval')
-parser.add_argument('--nepochs', default=(0, 10, 200), nargs='+', help='which checkpoints to be interfered with', type=int)
+parser.add_argument('--nepochs', default=(190, 200, 10), nargs='+', help='which checkpoints to be interfered with', type=int)
 parser.add_argument('--nalpha', default=(0, 100, 2), nargs='+', help='list of alphas', type=int)
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
@@ -135,6 +134,7 @@ with open('outputs/' + parser.parse_args().jsn + '.json', 'rt') as f:
     t_args = argparse.Namespace()
     t_args.__dict__.update(json.load(f))
     args = parser.parse_args(namespace=t_args)
+#args.prj = 'FrontWO286'
 args.prj = args.dataset + '_' + args.prj
 
 
@@ -143,32 +143,24 @@ for epoch in range(*args.nepochs):
     test_unit.get_model(epoch, eval=args.eval)
     for alpha in np.linspace(*args.nalpha):
         out_xy = list(map(lambda v: test_unit.get_one_output(v, 'x', alpha), args.irange))
-        out_yx = list(map(lambda v: test_unit.get_one_output(v, 'y', alpha), args.irange))
-
         out_xy = list(zip(*out_xy))
-        out_yx = list(zip(*out_yx))
-
         seg_xy = test_unit.get_all_seg(out_xy)
-        seg_yx = test_unit.get_all_seg(out_yx)
-
         diff_xy = [(x[1] - x[0]) for x in list(zip(out_xy[2], out_xy[0]))]
-        diff_yx = [(x[1] - x[0]) for x in list(zip(out_yx[2], out_yx[0]))]
 
         diff_xy[0][0, 0, 0] = 2
         diff_xy[0][0, 0, 1] = -2
-        diff_yx[0][0, 0, 0] = 2
-        diff_yx[0][0, 0, 1] = -2
 
         # out_xy: [oriX, oriY, imgXY]
         # out_yx: [oriY, oriX, imgYX]
 
         to_show = [out_xy[0],
-                   list(map(lambda x, y: overlap_red(x, y), out_xy[0], seg_xy[0])),
+                   #list(map(lambda x, y: overlap_red(x, y), out_xy[0], seg_xy[0])),
                    out_xy[1],
-                   list(map(lambda x, y: overlap_red(x, y), out_xy[1], seg_xy[1])),
+                   #list(map(lambda x, y: overlap_red(x, y), out_xy[1], seg_xy[1])),
                    out_xy[2],
-                   diff_xy,
-                   list(map(lambda x, y: overlap_red(x, y), diff_xy, seg_xy[2])),
+                   seg_xy[2]
+                   #diff_xy,
+                   #list(map(lambda x, y: overlap_red(x, y), diff_xy, seg_xy[2])),
                    ]
 
         to_show = [torch.cat(x, len(x[0].shape) - 1) for x in to_show]

@@ -9,6 +9,8 @@ import torchvision.transforms as transforms
 from PIL import Image
 import numpy as np
 import os
+from skimage import io
+from utils.data_utils import imagesc as show
 
 
 def to_8bit(x):
@@ -82,68 +84,67 @@ class DatasetFromFolderSubjects(data.Dataset):
         return a_list, b_list
 
 
+import albumentations as A
+from albumentations.pytorch.transforms import ToTensorV2
+
+
+def get_transforms(input_size=256, resize=286, need=('train', 'test')):
+    transformations = {}
+    if 'train' in need:
+        transformations['train'] = A.Compose([
+            A.Resize(resize, resize),
+            A.RandomCrop(height=input_size, width=input_size, p=1.),
+            #A.ShiftScaleRotate(p=0.7),
+            #A.HorizontalFlip(p=0.5),
+            #A.VerticalFlip(p=0.5),
+            #A.RandomBrightnessContrast(p=0.5),
+            #A.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), p=1.0),
+            ToTensorV2(p=1.0),
+        ], p=1.0, additional_targets={'target': 'image'})
+    if 'test' in need:
+        transformations['test'] = A.Compose([
+            A.Resize(resize, resize),
+            A.CenterCrop(height=input_size, width=input_size, p=1.),
+            #A.Normalize(p=1.0),
+            ToTensorV2(p=1.0),
+        ], p=1.0, additional_targets={'target': 'image'})
+    return transformations
+
+
 class DatasetFromFolder(data.Dataset):
-    def __init__(self, image_dir, opt, mode, unpaired=False):
+    def __init__(self, root, path, opt, mode, unpaired=False):
         super(DatasetFromFolder, self).__init__()
         self.opt = opt
         self.mode = mode
-        self.a_path = join(image_dir, self.opt.direction.split('_')[0])
-        self.b_path = join(image_dir, self.opt.direction.split('_')[1])
-        self.image = sorted([x.split('/')[-1] for x in glob.glob(self.a_path+'/*')])
-
-        self.resize = opt.resize
-        self.seg_model = torch.load(os.environ.get('model_seg')).cuda()
         self.unpaired = unpaired
 
+        self.a_path, self.b_path = (os.path.join(root, x) for x in path.split('_'))
+
+        self.image_a = sorted([x.split('/')[-1] for x in glob.glob(self.a_path + '/*')])
         if self.unpaired:
             self.image_b = [x.split('/')[-1] for x in glob.glob(self.b_path + '/*')]
             random.shuffle(self.image_b)
+        else:
+            self.image_b = self.image_a
+
+        self.resize = opt.resize
+        self.transforms = get_transforms(resize=self.resize)[mode]
 
     def __len__(self):
-        return len(self.image)
+        return len(self.image_a)
 
     def __getitem__(self, index):
-        a = Image.open(join(self.a_path, self.image[index]))  #.convert('RGB') (DESS: 294>286) (PAIN: 224>286)
-        if not self.unpaired:
-            b = Image.open(join(self.b_path, self.image[index]))  #.convert('RGB')
-        else:
-            b = Image.open(join(self.b_path, self.image_b[index]))
-
-        if self.resize != 0:
-            a = a.resize((self.resize, self.resize), Image.BICUBIC)  # 444 > 286
-            b = b.resize((self.resize, self.resize), Image.BICUBIC)
-        a = transforms.ToTensor()(np.array(a))
-        b = transforms.ToTensor()(np.array(b))
-        a = a.type(torch.float32)
-        b = b.type(torch.float32)
+        a = Image.open(join(self.a_path, self.image_a[index]))  #.convert('RGB') (DESS: 294>286) (PAIN: 224>286)
+        b = Image.open(join(self.b_path, self.image_b[index]))
+        a = np.array(a).astype(np.float32)
+        b = np.array(b).astype(np.float32)
         a = a / a.max()
         b = b / b.max()
 
-        # random crop
-        osize = a.shape[2]
-        if self.mode == 'train':
-            w_offset = random.randint(0, max(0, osize - 256 - 1))
-            h_offset = random.randint(0, max(0, osize - 256 - 1))
-        elif self.mode == 'test':
-            w_offset = 15
-            h_offset = 15
-        a = a[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
-        b = b[:, h_offset:h_offset + 256, w_offset:w_offset + 256]
-
-        if a.shape[0] != 3:
-            a = torch.cat([a] * 3, 0)
-            b = torch.cat([b] * 3, 0)
+        augmented = self.transforms(image=a, target=b)
+        a, b = augmented['image'], augmented['target']
         a = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(a)
         b = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(b)
-
-        if self.opt.flip:
-            if self.mode == 'train':  # flipping
-                if random.random() < 0.5:
-                    idx = [i for i in range(a.size(2) - 1, -1, -1)]
-                    idx = torch.LongTensor(idx)
-                    a = a.index_select(2, idx)
-                    b = b.index_select(2, idx)
-
         return a, b
 
 
@@ -154,9 +155,9 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
     # Data
-    parser.add_argument('--dataset', type=str, default='painfull')
+    parser.add_argument('--dataset', type=str, default='FlySide')
     parser.add_argument('--bysubject', action='store_true', dest='bysubject', default=False)
-    parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
+    parser.add_argument('--direction', type=str, default='weakxy_orixy', help='a2b or b2a')
     parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
     parser.add_argument('--resize', type=int, default=0)
     parser.add_argument('--mode', type=str, default='dummy')
@@ -166,11 +167,11 @@ if __name__ == '__main__':
     opt.resize = 286
     #  Dataset
     if opt.bysubject:
-        from dataloader.data import DatasetFromFolderSubjects as Dataset
+        Dataset = DatasetFromFolderSubjects
     else:
-        from dataloader.data import DatasetFromFolder as Dataset
+        Dataset = DatasetFromFolder
 
-    train_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/train/', opt, mode='train')
-    test_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/test/', opt, mode='test')
+    train_set = Dataset(root=os.environ.get('DATASET') + opt.dataset + '/train/', path=opt.direction,
+                        opt=opt, mode='train')
 
     x = train_set.__getitem__(10)

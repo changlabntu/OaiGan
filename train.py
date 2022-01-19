@@ -57,6 +57,8 @@ parser = GAN.add_model_specific_args(parser)
 opt = parser.parse_args()
 opt.prj = opt.dataset + '_' + opt.prj
 opt.not_tracking_hparams = ['mode', 'port', 'epoch_load', 'legacy', 'threads', 'test_batch_size']
+os.makedirs(os.environ.get('LOGS') + opt.dataset + '/', exist_ok=True)
+os.makedirs(os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/', exist_ok=True)
 save_json(opt, os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/' + opt.prj + '.json')
 shutil.copy('engine/' + opt.engine + '.py', os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/' + opt.engine + '.py')
 
@@ -64,22 +66,17 @@ shutil.copy('engine/' + opt.engine + '.py', os.environ.get('LOGS') + opt.dataset
 if opt.bysubject:
     from dataloader.data import DatasetFromFolderSubjects as Dataset
 else:
-    from dataloader.data import DatasetFromFolder as Dataset
+    from dataloader.data_aug import DatasetFromFolder as Dataset
 
 # Load Dataset and DataLoader
-#train_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/train/', opt, mode='train', unpaired=opt.unpaired)
-#test_set = Dataset(os.environ.get('DATASET') + opt.dataset + '/test/', opt, mode='test', unpaired=opt.unpaired)
-
-train_set = Dataset(path_a=os.environ.get('DATASET') + opt.dataset + '/train/' + opt.direction.split('_')[0] + '/',
-                    path_b=os.environ.get('DATASET') + opt.dataset + '/train/' + opt.direction.split('_')[1] + '/',
+train_set = Dataset(root=os.environ.get('DATASET') + opt.dataset + '/train/',
+                    path=opt.direction,
                     opt=opt, mode='train', unpaired=opt.unpaired)
-
 train_loader = DataLoader(dataset=train_set, num_workers=opt.threads, batch_size=opt.batch_size, shuffle=True)
 
 #  Pytorch Lightning Model
 import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
-os.makedirs(os.environ.get('LOGS') + opt.dataset + '/', exist_ok=True)
 logger = pl_loggers.TensorBoardLogger(os.environ.get('LOGS') + opt.dataset + '/', name=opt.prj)
 net = GAN(hparams=opt, train_loader=None,
           test_loader=None, checkpoints=os.environ.get('CHECKPOINTS'))

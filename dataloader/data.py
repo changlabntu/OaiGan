@@ -82,13 +82,36 @@ class DatasetFromFolderSubjects(data.Dataset):
         return a_list, b_list
 
 
+import albumentations as A
+from albumentations.pytorch.transforms import ToTensorV2
+
+
+def get_transforms(input_size=256, need=('train', 'val')):
+    transformations = {}
+    if 'train' in need:
+        transformations['train'] = A.Compose([
+            A.RandomCrop(height=input_size, width=input_size, p=1.),
+            A.ShiftScaleRotate(p=0.7),
+            A.HorizontalFlip(p=0.5),
+            A.VerticalFlip(p=0.5),
+            A.RandomBrightnessContrast(p=0.5),
+            A.Normalize(p=1.0),
+            ToTensorV2(p=1.0),
+        ], p=1.0, additional_targets={'scr': 'mask', 'weight': 'mask'})
+    if 'val' in need:
+        transformations['val'] = A.Compose([
+            A.Normalize(p=1.0),
+            ToTensorV2(p=1.0),
+        ], p=1.0, additional_targets={'scr': 'mask', 'weight': 'mask'})
+    return transformations
+
+
 class DatasetFromFolder(data.Dataset):
-    def __init__(self, path_a, path_b, opt, mode, unpaired=False):
+    def __init__(self, root, path, opt, mode, unpaired=False):
         super(DatasetFromFolder, self).__init__()
         self.opt = opt
         self.mode = mode
-        self.a_path = join(path_a)
-        self.b_path = join(path_b)
+        self.a_path, self.b_path = (os.path.join(root, x) for x in path.split('_'))
         self.unpaired = unpaired
 
         self.image_a = sorted([x.split('/')[-1] for x in glob.glob(self.a_path + '*')])
