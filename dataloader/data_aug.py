@@ -54,6 +54,27 @@ def separate_subjects_n_slices(img_list):
     return subject
 
 
+import albumentations as A
+from albumentations.pytorch.transforms import ToTensorV2
+
+
+def get_transforms(crop_size, resize, need=('train', 'test')):
+    transformations = {}
+    if 'train' in need:
+        transformations['train'] = A.Compose([
+            A.Resize(resize, resize),
+            A.RandomCrop(height=crop_size, width=crop_size, p=1.),
+            ToTensorV2(p=1.0),
+        ], p=1.0, additional_targets={'target': 'image'})
+    if 'test' in need:
+        transformations['test'] = A.Compose([
+            A.Resize(resize, resize),
+            A.CenterCrop(height=crop_size, width=crop_size, p=1.),
+            ToTensorV2(p=1.0),
+        ], p=1.0, additional_targets={'target': 'image'})
+    return transformations
+
+
 class DatasetFromFolderSubjects(data.Dataset):
     def __init__(self, image_dir, opt, mode):
         super(DatasetFromFolderSubjects, self).__init__()
@@ -84,35 +105,8 @@ class DatasetFromFolderSubjects(data.Dataset):
         return a_list, b_list
 
 
-import albumentations as A
-from albumentations.pytorch.transforms import ToTensorV2
-
-
-def get_transforms(input_size=256, resize=286, need=('train', 'test')):
-    transformations = {}
-    if 'train' in need:
-        transformations['train'] = A.Compose([
-            A.Resize(resize, resize),
-            A.RandomCrop(height=input_size, width=input_size, p=1.),
-            #A.ShiftScaleRotate(p=0.7),
-            #A.HorizontalFlip(p=0.5),
-            #A.VerticalFlip(p=0.5),
-            #A.RandomBrightnessContrast(p=0.5),
-            #A.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), p=1.0),
-            ToTensorV2(p=1.0),
-        ], p=1.0, additional_targets={'target': 'image'})
-    if 'test' in need:
-        transformations['test'] = A.Compose([
-            A.Resize(resize, resize),
-            A.CenterCrop(height=input_size, width=input_size, p=1.),
-            #A.Normalize(p=1.0),
-            ToTensorV2(p=1.0),
-        ], p=1.0, additional_targets={'target': 'image'})
-    return transformations
-
-
 class DatasetFromFolder(data.Dataset):
-    def __init__(self, root, path, opt, mode, unpaired=False):
+    def __init__(self, root, path, opt, mode, unpaired=False, transforms=None):
         super(DatasetFromFolder, self).__init__()
         self.opt = opt
         self.mode = mode
@@ -127,8 +121,20 @@ class DatasetFromFolder(data.Dataset):
         else:
             self.image_b = self.image_a
 
-        self.resize = opt.resize
-        self.transforms = get_transforms(resize=self.resize)[mode]
+        if self.opt.resize == 0:
+            self.resize = np.array(Image.open(join(self.a_path, self.image_a[0]))).shape[1]
+        else:
+            self.resize = self.opt.resize
+
+        if self.opt.cropsize == 0:
+            self.cropsize = np.array(Image.open(join(self.a_path, self.image_a[0]))).shape[1]
+        else:
+            self.cropsize = self.opt.cropsize
+
+        if transforms is None:
+            self.transforms = get_transforms(crop_size=self.cropsize, resize=self.resize)[mode]
+        else:
+            self.transforms = transforms
 
     def __len__(self):
         return len(self.image_a)
@@ -140,12 +146,15 @@ class DatasetFromFolder(data.Dataset):
         b = np.array(b).astype(np.float32)
         a = a / a.max()
         b = b / b.max()
+        if len(a.shape) == 2: # if grayscale
+            a = np.concatenate([np.expand_dims(a, 2)]*3, 2)
+            b = np.concatenate([np.expand_dims(b, 2)]*3, 2)
 
         augmented = self.transforms(image=a, target=b)
         a, b = augmented['image'], augmented['target']
         a = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(a)
         b = transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(b)
-        return a, b
+        return a, b, #mask
 
 
 if __name__ == '__main__':
@@ -155,16 +164,16 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
     # Data
-    parser.add_argument('--dataset', type=str, default='FlySide')
+    parser.add_argument('--dataset', type=str, default='FlyZ')
     parser.add_argument('--bysubject', action='store_true', dest='bysubject', default=False)
     parser.add_argument('--direction', type=str, default='weakxy_orixy', help='a2b or b2a')
     parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
     parser.add_argument('--resize', type=int, default=0)
+    parser.add_argument('--cropsize', type=int, default=0)
     parser.add_argument('--mode', type=str, default='dummy')
     parser.add_argument('--port', type=str, default='dummy')
     opt = parser.parse_args()
     opt.bysubject = False
-    opt.resize = 286
     #  Dataset
     if opt.bysubject:
         Dataset = DatasetFromFolderSubjects

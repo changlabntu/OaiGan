@@ -169,11 +169,11 @@ class BaseModel(pl.LightningModule):
         self.optimizer_d = optim.Adam(netd_parameters, lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
         return [self.optimizer_d, self.optimizer_g], []
 
-    @staticmethod
-    def add_model_specific_args(parent_parser):
-        parser = parent_parser.add_argument_group("LitModel")
-        parser.add_argument("--n_attrs", type=int, default=1)
-        return parent_parser
+    #@staticmethod
+    #def add_model_specific_args(parent_parser):
+    #    parser = parent_parser.add_argument_group("LitModel")
+    #    parser.add_argument("--n_attrs", type=int, default=1)
+    #    return parent_parser
 
     def add_loss_adv(self, a, net_d, loss, coeff, truth, b=None, log=None, stacked=False):
         if stacked:
@@ -198,11 +198,13 @@ class BaseModel(pl.LightningModule):
         return loss
 
     def training_step(self, batch, batch_idx, optimizer_idx):
-        self.oriX, self.oriY = batch
-        if self.hparams.bysubject:  # if working on 3D input
-            (B, S, C, H, W) = self.oriX.shape
-            self.oriX = self.oriX.view(B * S, C, H, W)
-            self.oriY = self.oriY.view(B * S, C, H, W)
+        self.batch = batch
+        #self.oriX = batch[0]
+        #self.oriY = batch[1]
+        #if self.hparams.bysubject:  # if working on 3D input
+        #    (B, S, C, H, W) = self.oriX.shape
+        #    self.oriX = self.oriX.view(B * S, C, H, W)
+        #    self.oriY = self.oriY.view(B * S, C, H, W)
 
         if optimizer_idx == 0:
             imgs = self.generation()

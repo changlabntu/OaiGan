@@ -17,8 +17,8 @@ parser.add_argument('--dataset', type=str, default='pain')
 parser.add_argument('--bysubject', action='store_true', dest='bysubject', default=False)
 parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
 parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
-parser.add_argument('--resize', type=int, default=0)
-parser.add_argument('--unpaired', action='store_true', dest='unpaired', default=False)
+parser.add_argument('--resize', type=int, default=0, help='size for resizing before cropping, 0 for no resizing')
+parser.add_argument('--cropsize', type=int, default=256, help='size for cropping, 0 for no crop')
 # Model
 parser.add_argument('--gan_mode', type=str, default='vanilla', help='gan mode')
 parser.add_argument('--netG', type=str, default='unet_256', help='netG model')
@@ -28,6 +28,7 @@ parser.add_argument('--input_nc', type=int, default=3, help='input image channel
 parser.add_argument('--output_nc', type=int, default=3, help='output image channels')
 parser.add_argument('--ngf', type=int, default=64, help='generator filters in first conv layer')
 parser.add_argument('--ndf', type=int, default=64, help='discriminator filters in first conv layer')
+parser.add_argument("--n_attrs", type=int, default=1)
 # Training
 parser.add_argument('-b', dest='batch_size', type=int, default=1, help='training batch size')
 parser.add_argument('--test_batch_size', type=int, default=1, help='testing batch size')
@@ -53,6 +54,7 @@ parser.add_argument('--port', type=str, default='dummy')
 GAN = getattr(__import__('engine.' + parser.parse_args().engine), parser.parse_args().engine).GAN
 parser = GAN.add_model_specific_args(parser)
 
+
 # Finalize Arguments
 opt = parser.parse_args()
 opt.prj = opt.dataset + '_' + opt.prj
@@ -63,15 +65,12 @@ save_json(opt, os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/' + opt.
 shutil.copy('engine/' + opt.engine + '.py', os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/' + opt.engine + '.py')
 
 #  Define Dataset Class
-if opt.bysubject:
-    from dataloader.data import DatasetFromFolderSubjects as Dataset
-else:
-    from dataloader.data_aug import DatasetFromFolder as Dataset
+from dataloader.data_multi import MultiData as Dataset
 
 # Load Dataset and DataLoader
 train_set = Dataset(root=os.environ.get('DATASET') + opt.dataset + '/train/',
                     path=opt.direction,
-                    opt=opt, mode='train', unpaired=opt.unpaired)
+                    opt=opt, mode='train')
 train_loader = DataLoader(dataset=train_set, num_workers=opt.threads, batch_size=opt.batch_size, shuffle=True)
 
 #  Pytorch Lightning Model
@@ -87,6 +86,9 @@ trainer.fit(net, train_loader)#, test_loader)  # test loader not used during tra
 
 # USAGE
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset TSE_DESS -b 16 --prj VryCycle --direction a_b --resize 286 --engine cyclegan --lamb 10 --unpaired
-# CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj NS4_g_att_bs --direction aregis1_b --resize 286 --engine NS4 --netG attgan
-# CUDA_VISIBLE_DEVICES=1 python train.py --dataset fly0 -b 16 --prj FlyCycle --direction orgpatch2_flypatch --resize 286 --engine cyclegan --lamb 10 --unpaired
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj VryNS4B --direction aregis1_b --resize 286 --engine NS4 --netG attgan
+
+# CUDA_VISIBLE_DEVICES=0 python train.py --dataset FlyZ -b 16 --prj WpWn286B --direction xyweak%zyweak --resize 286 --engine cyclegan --lamb 10
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset FlyZ -b 16 --prj OpWp286 --direction xyweak_xyorisb --resize 286 --engine pix2pixNS
+
 

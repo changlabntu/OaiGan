@@ -34,13 +34,9 @@ def imagesc(x, show=True, save=None):
     if (len(x.shape) == 3) & (x.shape[0] == 3):
         x = np.transpose(x, (1, 2, 0))
 
-    if isinstance(x, list):
-        x = [to_8bit(y) for y in x]
-        x = np.concatenate(x, 1)
-        x = Image.fromarray(x)
-    else:
-        x = x - x.min()
-        x = Image.fromarray(to_8bit(x))
+    x = x - x.min()
+    x = Image.fromarray(to_8bit(x))
+
     if show:
         io.imshow(np.array(x))
         plt.show()

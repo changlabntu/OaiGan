@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from dotenv import load_dotenv
 from utils.data_utils import norm_01
+from skimage import io
 
 load_dotenv('.env')
 
@@ -37,19 +38,20 @@ class Pix2PixModel:
         self.args = args
         self.net_g = None
         self.dir_checkpoints = os.environ.get('CHECKPOINTS')
-        from dataloader.data_aug import DatasetFromFolder as Dataset
+        from dataloader.data_multi import MultiData as Dataset
 
-        self.test_set = Dataset(root=os.environ.get('DATASET') + args.dataset + '/train/',
+        self.test_set = Dataset(root=os.environ.get('DATASET') + args.testset,
                                 path=args.direction,
-                                opt=args, mode='test', unpaired=args.unpaired)
+                                opt=args, mode='test')
 
         os.makedirs(os.path.join("outputs/results", args.prj), exist_ok=True)
 
         self.seg_model = torch.load(os.environ.get('model_seg')).cuda()
         self.netg_t2d = torch.load(os.environ.get('model_t2d')).cuda()
 
-        #magic = torch.load('/media/ExtHDD01/checkpoints/FlySide_0/netGYX_model_epoch_200.pth')
-        self.magic = torch.load('/media/ExtHDD01/checkpoints/FlySide_FrontWO286/netG_model_epoch_170.pth').cuda()
+        #self.magic256 = torch.load('/media/ExtHDD01/checkpoints/FlyZ_WpOp/netG_model_epoch_170.pth').cuda()
+        self.magic286 = torch.load('/media/ExtHDD01/checkpoints/FlyZ_WpOp/netG_model_epoch_170.pth').cuda()
+        #self.magic286 = torch.load('/media/ExtHDD01/checkpoints/FlyZ_WpOp286Mask/netG_model_epoch_10.pth').cuda()
 
         self.device = torch.device("cuda:0")
 
@@ -101,7 +103,7 @@ class Pix2PixModel:
         return seg
 
     def get_magic(self, ori):
-        magic = self.magic(ori.cuda().unsqueeze(0))
+        magic = self.magic286(ori.cuda().unsqueeze(0))
         magic = magic[0][0, 0, ::].detach().cpu()
         return magic
 
@@ -114,67 +116,79 @@ class Pix2PixModel:
         return list_seg
 
 
+def to_print(to_show, save_name):
+    to_show = [torch.cat(x, len(x[0].shape) - 1) for x in to_show]
+    to_show = [x - x.min() for x in to_show]
+
+    for i in range(len(to_show)):
+        if len(to_show[i].shape) == 2:
+            to_show[i] = torch.cat([to_show[i].unsqueeze(0)] * 3, 0)
+
+    to_print = np.concatenate([x / x.max() for x in to_show], 1).astype(np.float16)
+    imagesc(to_print, show=False, save=save_name)
+
+
 # Command Line Argument
 parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
-parser.add_argument('--jsn', type=str, default='FlySideWnWp', help='name of ini file')
+parser.add_argument('--jsn', type=str, default='FlyZWpOp286', help='name of ini file')
 parser.add_argument('--dataset', help='name of training dataset')
 parser.add_argument('--testset', help='name of testing dataset if different than the training dataset')
-parser.add_argument('--prj', type=str, help='name of the project')
+parser.add_argument('--prj', type=str, help='prjname')
 parser.add_argument('--direction', type=str, help='a2b or b2a')
 parser.add_argument('--unpaired', action='store_true', dest='unpaired', default=False)
 parser.add_argument('--netg', type=str)
 parser.add_argument('--resize', type=int)
+parser.add_argument('--cropsize', type=int)
 parser.add_argument('--flip', action='store_true', dest='flip')
 parser.add_argument('--eval', action='store_true', dest='eval')
 parser.add_argument('--nepochs', default=(190, 200, 10), nargs='+', help='which checkpoints to be interfered with', type=int)
-parser.add_argument('--nalpha', default=(0, 100, 2), nargs='+', help='list of alphas', type=int)
+parser.add_argument('--nalpha', default=(0, 100, 2), nargs='+', help='range of additional input parameter for generator', type=int)
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
+
 with open('outputs/' + parser.parse_args().jsn + '.json', 'rt') as f:
     t_args = argparse.Namespace()
     t_args.__dict__.update(json.load(f))
     args = parser.parse_args(namespace=t_args)
-#args.prj = 'FrontWO286'
 args.prj = args.dataset + '_' + args.prj
-
+if len(args.nepochs) == 1:
+    args.nepochs = [args.nepochs[0], args.nepochs[0]+1, 1]
+if len(args.nalpha) == 1:
+    args.nalpha = [args.nalpha[0], args.nalpha[0]+1, 1]
 
 test_unit = Pix2PixModel(args=args)
+print(len(test_unit.test_set))
 for epoch in range(*args.nepochs):
     test_unit.get_model(epoch, eval=args.eval)
-    for alpha in np.linspace(*args.nalpha):
-        out_xy = list(map(lambda v: test_unit.get_one_output(v, 'x', alpha), args.irange))
-        out_xy = list(zip(*out_xy))
-        seg_xy = test_unit.get_all_seg(out_xy)
-        diff_xy = [(x[1] - x[0]) for x in list(zip(out_xy[2], out_xy[0]))]
+    for ii in range(1):#range(len(test_unit.test_set)):
+        #args.irange = [ii]
+        for alpha in np.linspace(*args.nalpha):
+            out_xy = list(map(lambda v: test_unit.get_one_output(v, 'x', alpha), args.irange))
+            out_xy = list(zip(*out_xy))
+            seg_xy = test_unit.get_all_seg(out_xy)
+            diff_xy = [(x[1] - x[0]) for x in list(zip(out_xy[2], out_xy[0]))]
 
-        diff_xy[0][0, 0, 0] = 2
-        diff_xy[0][0, 0, 1] = -2
+            diff_xy[0][0, 0, 0] = 2
+            diff_xy[0][0, 0, 1] = -2
 
-        # out_xy: [oriX, oriY, imgXY]
-        # out_yx: [oriY, oriX, imgYX]
+            to_show = [out_xy[0],
+                       #seg_xy[0],
+                       #list(map(lambda x, y: overlap_red(x, y), out_xy[0], seg_xy[0])),
+                       out_xy[1],
+                       #seg_xy[1],
+                       #list(map(lambda x, y: overlap_red(x, y), out_xy[1], seg_xy[1])),
+                       out_xy[2],
+                       seg_xy[2]
+                       #diff_xy,
+                       #list(map(lambda x, y: overlap_red(x, y), diff_xy, seg_xy[2])),
+                       ]
 
-        to_show = [out_xy[0],
-                   #list(map(lambda x, y: overlap_red(x, y), out_xy[0], seg_xy[0])),
-                   out_xy[1],
-                   #list(map(lambda x, y: overlap_red(x, y), out_xy[1], seg_xy[1])),
-                   out_xy[2],
-                   seg_xy[2]
-                   #diff_xy,
-                   #list(map(lambda x, y: overlap_red(x, y), diff_xy, seg_xy[2])),
-                   ]
-
-        to_show = [torch.cat(x, len(x[0].shape) - 1) for x in to_show]
-        to_show = [x - x.min() for x in to_show]
-
-        for i in range(len(to_show)):
-            if len(to_show[i].shape) == 2:
-                to_show[i] = torch.cat([to_show[i].unsqueeze(0)]*3, 0)
-
-        imagesc(np.concatenate([x / x.max() for x in to_show], 1), show=False,
-                save=os.path.join("outputs/results", args.prj, str(epoch) + '_' + str(alpha) + '.jpg'))
+            to_print(to_show, save_name=os.path.join("outputs/results", args.prj,
+                                                     str(epoch) + '_' + str(alpha) + '_' + str(ii).zfill(4) + '.jpg'))
 
 
 
 # USAGE
 # CUDA_VISIBLE_DEVICES=0 python test.py --jsn default --dataset pain --nalpha 0 100 2  --prj VryAtt
 # CUDA_VISIBLE_DEVICES=0 python test.py --jsn default --dataset TSE_DESS --nalpha 0 100 1  --prj VryCycleUP --net netGXY
+
