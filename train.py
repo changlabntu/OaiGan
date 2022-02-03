@@ -2,13 +2,13 @@ from __future__ import print_function
 import argparse
 import torch.nn as nn
 from torch.utils.data import DataLoader
-import os, shutil
+import os, shutil, copy
 from dotenv import load_dotenv
 from utils.make_config import *
 load_dotenv('.env')
 
 # Arguments
-parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
+parser = argparse.ArgumentParser()#add_help=False)
 # Project name
 parser.add_argument('--prj', type=str, default='', help='name of the project')
 parser.add_argument('--engine', dest='engine', type=str, default='mydcgan', help='use which engine')
@@ -42,7 +42,6 @@ parser.add_argument('--epoch_load', type=int, default=0, help='to load checkpoin
 parser.add_argument('--n_epochs_decay', type=int, default=100, help='# of iter to linearly decay learning rate to zero')
 parser.add_argument('--lr_policy', type=str, default='lambda', help='learning rate policy: lambda|step|plateau|cosine')
 parser.add_argument('--lr_decay_iters', type=int, default=50, help='multiply by a gamma every lr_decay_iters iterations')
-
 # Loss
 parser.add_argument('--lamb', type=int, default=100, help='weight on L1 term in objective')
 # Misc
@@ -51,9 +50,9 @@ parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
 
 # Model-specific Arguments
-GAN = getattr(__import__('engine.' + parser.parse_args().engine), parser.parse_args().engine).GAN
+engine = parser.parse_known_args()[0].engine
+GAN = getattr(__import__('engine.' + engine), engine).GAN
 parser = GAN.add_model_specific_args(parser)
-
 
 # Finalize Arguments
 opt = parser.parse_args()

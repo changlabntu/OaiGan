@@ -33,29 +33,17 @@ class GAN(BaseModel):
         self.oriY = self.batch[2]
         self.oriZ = self.batch[1]
 
-        if 0:
-            self.imgXY0 = self.net_gXY(self.oriX)[0]
-            self.imgYX0 = self.net_gYX(self.oriY)[0]
+        self.imgXY0 = self.net_gXY(self.oriX, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())[0]
+        self.imgXY1 = self.net_gXY(self.oriX, a=torch.ones(self.oriX.shape[0], self.net_g_inc).cuda())[0]
+        self.imgYX0 = self.net_gYX(self.oriY, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())[0]
+        #self.imgYX1 = self.net_gYX(oriY, a=torch.ones(oriX.shape[0], self.net_g_inc).cuda())[0]
 
-            self.imgXYX = self.net_gYX(self.imgXY0)[0]
-            self.imgYXY = self.net_gXY(self.imgYX0)[0]
+        self.imgXYX = self.net_gYX(self.imgXY0, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())[0]
+        self.imgYXY = self.net_gXY(self.imgYX0, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())[0]
 
-            if self.hparams.lambI > 0:
-                self.idt_X = self.net_gYX(self.oriX)[0]
-                self.idt_Y = self.net_gXY(self.oriY)[0]
-
-        else:
-            self.imgXY0 = self.net_gXY(self.oriX, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())[0]
-            self.imgXY1 = self.net_gXY(self.oriX, a=torch.ones(self.oriX.shape[0], self.net_g_inc).cuda())[0]
-            self.imgYX0 = self.net_gYX(self.oriY, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())[0]
-            #self.imgYX1 = self.net_gYX(oriY, a=torch.ones(oriX.shape[0], self.net_g_inc).cuda())[0]
-
-            self.imgXYX = self.net_gYX(self.imgXY0, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())[0]
-            self.imgYXY = self.net_gXY(self.imgYX0, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())[0]
-
-            if self.hparams.lambI > 0:
-                self.idt_X = self.net_gYX(self.oriX, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())[0]
-                self.idt_Y = self.net_gXY(self.oriY, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())[0]
+        if self.hparams.lambI > 0:
+            self.idt_X = self.net_gYX(self.oriX, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())[0]
+            self.idt_Y = self.net_gXY(self.oriY, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())[0]
 
     def backward_g(self, inputs):
         loss_g = 0
