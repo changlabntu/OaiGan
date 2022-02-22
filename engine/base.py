@@ -69,9 +69,7 @@ class BaseModel(pl.LightningModule):
         # hyperparameters
         hparams = {x: vars(hparams)[x] for x in vars(hparams).keys() if x not in hparams.not_tracking_hparams}
         hparams.pop('not_tracking_hparams', None)
-        self.hparams = hparams
         self.hparams.update(hparams)
-        print(self.hparams)
         self.save_hyperparameters(self.hparams)
         self.best_auc = 0
 
@@ -154,9 +152,6 @@ class BaseModel(pl.LightningModule):
         print(print_num_of_parameters(self.net_g))  # number of trainable parameters
 
     def configure_optimizers(self):
-        #self.optimizer_g = optim.Adam(list(self.net_gXY.parameters()) + list(self.classifier.parameters()),
-        #                              lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
-        #self.optimizer_d = optim.Adam(self.net_d.parameters(), lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
         netg_parameters = []
         for g in self.netg_names.keys():
             netg_parameters = netg_parameters + list(getattr(self, g).parameters())
@@ -199,9 +194,7 @@ class BaseModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         self.batch = batch
-        #self.oriX = batch[0]
-        #self.oriY = batch[1]
-        #if self.hparams.bysubject:  # if working on 3D input
+        #if self.hparams.bysubject:  # if working on 3D input, not using yet
         #    (B, S, C, H, W) = self.oriX.shape
         #    self.oriX = self.oriX.view(B * S, C, H, W)
         #    self.oriY = self.oriY.view(B * S, C, H, W)
@@ -219,21 +212,14 @@ class BaseModel(pl.LightningModule):
             return loss_g
 
     def training_epoch_end(self, outputs):
-        hparams = self.hparams
         self.net_g_scheduler.step()
         self.net_d_scheduler.step()
         # checkpoint
-        dir_checkpoints = self.dir_checkpoints
         if self.epoch % 10 == 0:
-            if not os.path.exists(dir_checkpoints):
-                os.mkdir(dir_checkpoints)
-            if not os.path.exists(os.path.join(dir_checkpoints, hparams.prj)):
-                os.mkdir(os.path.join(dir_checkpoints, hparams.prj))
-
             for name in self.netg_names.keys():
-                path = dir_checkpoints + ('/{}/' + self.netg_names[name] + '_model_epoch_{}.pth').format(hparams.prj, self.epoch)
+                path = self.dir_checkpoints + ('/' + self.netg_names[name] + '_model_epoch_{}.pth').format(self.epoch)
                 torch.save(getattr(self, name), path)
-                print("Checkpoint saved to {}".format(dir_checkpoints + '/' + hparams.prj))
+                print("Checkpoint saved to {}".format(path))
 
         self.epoch += 1
         self.tini = time.time()

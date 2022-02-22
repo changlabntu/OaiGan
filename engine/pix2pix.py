@@ -9,9 +9,14 @@ class GAN(BaseModel):
         BaseModel.__init__(self, hparams, train_loader, test_loader, checkpoints)
         print('using pix2pix.py')
 
+    @staticmethod
+    def add_model_specific_args(parent_parser):
+        return parent_parser
+
     def generation(self):
-        oriX = self.oriX
-        self.imgX0 = self.net_g(oriX)[0]
+        self.oriX = self.batch[0]
+        self.oriY = self.batch[1]
+        self.imgX0 = self.net_g(self.oriX)[0]
 
     def backward_g(self, inputs):
         # ADV(X0, Y)+

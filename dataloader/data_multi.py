@@ -13,6 +13,7 @@ from skimage import io
 from utils.data_utils import imagesc as show
 import albumentations as A
 from albumentations.pytorch.transforms import ToTensorV2
+import tifffile as tiff
 
 
 def to_8bit(x):
@@ -73,36 +74,6 @@ def get_transforms(crop_size, resize, additional_targets, need=('train', 'test')
     return transformations
 
 
-class DatasetFromFolderSubjects(data.Dataset):
-    def __init__(self, image_dir, opt, mode):
-        super(DatasetFromFolderSubjects, self).__init__()
-        self.single_data = PairedData(image_dir, opt, mode)
-        self.image = self.single_data.image
-        self.subject = separate_subjects_n_slices(self.image)
-        self.subject_keys = list(self.subject)
-        self.subject_keys.sort()
-
-    def __len__(self):
-        return len(self.subject_keys)
-
-    def __getitem__(self, index):
-        sub = self.subject_keys[index]
-        image_list = self.subject[sub]
-
-        a_list = []
-        b_list = []
-        for image in image_list:
-            image_name = str(sub) + '_' + str(image) + '.png'
-            a, b = self.single_data.__getitem__(self.image.index(image_name))
-            a_list.append(a.unsqueeze(0))
-            b_list.append(b.unsqueeze(0))
-
-        a_list = torch.cat(a_list, 0)
-        b_list = torch.cat(b_list, 0)
-
-        return a_list, b_list
-
-
 class MultiData(data.Dataset):
     def __init__(self, root, path, opt, mode, transforms=None):
         super(MultiData, self).__init__()
@@ -157,10 +128,8 @@ class PairedData(data.Dataset):
         return len(self.images)
 
     def load_img(self, path):
-        x = Image.open(path)  #.convert('RGB') (DESS: 294>286) (PAIN: 224>286)
+        x = Image.open(path) #(DESS: 294>286) (PAIN: 224>286)
         x = np.array(x).astype(np.float32)
-        #if x.max() == 0:
-        #    print(path)
         x = x / x.max()
         if len(x.shape) == 2: # if grayscale
             x = np.concatenate([np.expand_dims(x, 2)]*3, 2)
@@ -175,9 +144,19 @@ class PairedData(data.Dataset):
 
         outputs = ()
         for k in list(augmented.keys()):
+            #outputs = outputs + (augmented[k], )
             outputs = outputs + (transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(augmented[k]), )
 
         return outputs
+
+
+def save_segmentation(dataset, destination, filldigit=4):
+    seg = torch.load('submodels/model_seg_ZIB_res18_256.pth').cuda()
+    seg.eval()
+    for i in range(len(dataset)):
+        out = seg(dataset.__getitem__(i)[0].unsqueeze(0).cuda())
+        out = torch.argmax(out, 1).squeeze().detach().cpu().numpy().astype(np.uint8)
+        tiff.imsave(destination + str(i).zfill(filldigit) + '.tif', out)
 
 
 if __name__ == '__main__':
@@ -187,10 +166,11 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
     # Data
-    parser.add_argument('--dataset', type=str, default='FlyZ')
+    parser.add_argument('--dataset', type=str, default='kl3')
     parser.add_argument('--bysubject', action='store_true', dest='bysubject', default=False)
     #parser.add_argument('--direction', type=str, default='xyweak_xyori_xyorisb%zyweak_zyori', help='a2b or b2a')
-    parser.add_argument('--direction', type=str, default='zyweak_zyori%xyweak', help='a2b or b2a')
+    #parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
+    parser.add_argument('--direction', type=str, default='goodKL3reg', help='a2b or b2a')
     parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
     parser.add_argument('--resize', type=int, default=0)
     parser.add_argument('--cropsize', type=int, default=0)
@@ -198,10 +178,10 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=str, default='dummy')
     opt = parser.parse_args()
     opt.bysubject = False
+
     #  Dataset
-    opt.resize = 300
-    opt.cropsize = 0
     train_set = MultiData(root=os.environ.get('DATASET') + opt.dataset + '/train/', path=opt.direction,
                         opt=opt, mode='train')
 
-    x = train_set.__getitem__(10)
+    x = train_set.__getitem__(100)
+    save_segmentation(dataset=train_set, destination='/media/ExtHDD01/Dataset/paired_images/kl3/train/goodseg/')

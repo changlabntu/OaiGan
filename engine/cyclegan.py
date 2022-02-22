@@ -27,18 +27,18 @@ class GAN(BaseModel):
         return parent_parser
 
     def generation(self):
-        oriX = self.oriX
-        oriY = self.oriY
+        self.oriX = self.batch[0]
+        self.oriY = self.batch[1]
 
-        self.imgXY = self.net_gXY(oriX)[0]
-        self.imgYX = self.net_gYX(oriY)[0]
+        self.imgXY = self.net_gXY(self.oriX)[0]
+        self.imgYX = self.net_gYX(self.oriY)[0]
 
         self.imgXYX = self.net_gYX(self.imgXY)[0]
         self.imgYXY = self.net_gXY(self.imgYX)[0]
 
         if self.hparams.lambI > 0:
-            self.idt_X = self.net_gYX(oriX)[0]
-            self.idt_Y = self.net_gXY(oriY)[0]
+            self.idt_X = self.net_gYX(self.oriX)[0]
+            self.idt_Y = self.net_gXY(self.oriY)[0]
 
     def backward_g(self, inputs):
         loss_g = 0
@@ -75,4 +75,8 @@ class GAN(BaseModel):
         loss_d = self.add_loss_adv(a=self.oriX, net_d=self.net_dX, loss=loss_d, coeff=1, truth=True, stacked=False)
 
         return loss_d
+
+
+# USAGE
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset FlyZ -b 16 --prj WpWn256test --direction xyweak%zyweak --resize 256 --engine cyclegan --lamb 10
 

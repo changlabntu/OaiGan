@@ -147,7 +147,7 @@ class Generator(nn.Module):
         # c: (B, C)
         c = a
         c1 = c.view(c.size(0), c.size(1), 1, 1)
-        c1 = c1.repeat(1, 1, x.size(2), x.size(3))
+        c1 = c1.repeat(1, 1, x.size(2), x.size(3))  # (B, 2, H, W)
         x = torch.cat([x, c1], dim=1)
 
         x0 = self.down0(x)
@@ -165,16 +165,16 @@ class Generator(nn.Module):
         xu1 = self.up1(x6)
         #cat1 = crop_and_concat(xu1, x0)
 
-        if self.label_k in c:
-            x7 = self.conv7_k(xu1)
-        else:
-            x7 = self.conv7_g(xu1)
+        #if self.label_k in c:
+        x70 = self.conv7_k(xu1)
+        #else:
+        x71 = self.conv7_g(xu1)
 
         # residual
         if res:
             x7 = x7 + xori
 
-        return x7,
+        return x70, x71
 
 
 class Discriminator(nn.Module):
@@ -226,7 +226,6 @@ class Discriminator(nn.Module):
         h = self.encoder(x)
         if label == self.label_k:
             out = self.conv_k(h)
-
         else:
             out = self.conv_g(h)
         zwischen = self.conv2(h)
@@ -237,11 +236,11 @@ class Discriminator(nn.Module):
 
 
 if __name__ == '__main__':
-    g = Generator(n_channels=3, batch_norm=False)#.cuda()
+    g = Generator(n_channels=3, batch_norm=False).cuda()
     #from torchsummary import summary
     from utils.data_utils import print_num_of_parameters
     print_num_of_parameters(g)
 
     d = Discriminator()
     #summary(g, [(3, 256, 256), (2)])
-    #o = g(torch.rand(30, 3, 256, 256).cuda(), torch.ones(30, 2).cuda())
+    o = g(torch.rand(2, 3, 256, 256).cuda(), torch.ones(2, 2).cuda())

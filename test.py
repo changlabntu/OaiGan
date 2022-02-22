@@ -44,19 +44,23 @@ class Pix2PixModel:
                                 path=args.direction,
                                 opt=args, mode='test')
 
-        os.makedirs(os.path.join("outputs/results", args.prj), exist_ok=True)
+        os.makedirs(os.path.join("outputs/results", args.dataset, args.prj), exist_ok=True)
 
         self.seg_model = torch.load(os.environ.get('model_seg')).cuda()
         self.netg_t2d = torch.load(os.environ.get('model_t2d')).cuda()
 
         #self.magic256 = torch.load('/media/ExtHDD01/checkpoints/FlyZ_WpOp/netG_model_epoch_170.pth').cuda()
-        self.magic286 = torch.load('/media/ExtHDD01/checkpoints/FlyZ_WpOp/netG_model_epoch_170.pth').cuda()
-        #self.magic286 = torch.load('/media/ExtHDD01/checkpoints/FlyZ_WpOp286Mask/netG_model_epoch_10.pth').cuda()
+        #self.magic286 = torch.load('/media/ExtHDD01/checkpoints/FlyZ_WpOp/netG_model_epoch_170.pth').cuda()
+        self.magic286 = torch.load('/media/ExtHDD01/checkpointsold/FlyZ_WpOp286Mask/netG_model_epoch_10.pth').cuda()
 
         self.device = torch.device("cuda:0")
 
     def get_model(self,  epoch, eval=False):
-        model_path = self.dir_checkpoints + "{}/{}_model_epoch_{}.pth".format(args.prj, self.args.netg, epoch)
+        #model_path = self.dir_checkpoints + "{}/{}_model_epoch_{}.pth".format(args.prj, self.args.netg, epoch)
+
+        model_path = os.path.join(self.dir_checkpoints, self.args.dataset, self.args.prj) + \
+               ('/' + self.args.netg + '_model_epoch_{}.pth').format(epoch)
+
         net = torch.load(model_path).to(self.device)
         if eval:
             net.eval()
@@ -130,7 +134,7 @@ def to_print(to_show, save_name):
 
 # Command Line Argument
 parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
-parser.add_argument('--jsn', type=str, default='FlyZWpOp286', help='name of ini file')
+parser.add_argument('--jsn', type=str, default='FlyZWpWn', help='name of ini file')
 parser.add_argument('--dataset', help='name of training dataset')
 parser.add_argument('--testset', help='name of testing dataset if different than the training dataset')
 parser.add_argument('--prj', type=str, help='prjname')
@@ -142,7 +146,7 @@ parser.add_argument('--cropsize', type=int)
 parser.add_argument('--flip', action='store_true', dest='flip')
 parser.add_argument('--eval', action='store_true', dest='eval')
 parser.add_argument('--nepochs', default=(190, 200, 10), nargs='+', help='which checkpoints to be interfered with', type=int)
-parser.add_argument('--nalpha', default=(0, 100, 2), nargs='+', help='range of additional input parameter for generator', type=int)
+parser.add_argument('--nalpha', default=(0, 100, 1), nargs='+', help='range of additional input parameter for generator', type=int)
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
 
@@ -150,7 +154,7 @@ with open('outputs/' + parser.parse_args().jsn + '.json', 'rt') as f:
     t_args = argparse.Namespace()
     t_args.__dict__.update(json.load(f))
     args = parser.parse_args(namespace=t_args)
-args.prj = args.dataset + '_' + args.prj
+#args.prj = args.dataset + '/' + args.prj
 if len(args.nepochs) == 1:
     args.nepochs = [args.nepochs[0], args.nepochs[0]+1, 1]
 if len(args.nalpha) == 1:
@@ -165,6 +169,13 @@ for epoch in range(*args.nepochs):
         for alpha in np.linspace(*args.nalpha):
             out_xy = list(map(lambda v: test_unit.get_one_output(v, 'x', alpha), args.irange))
             out_xy = list(zip(*out_xy))
+
+            # masking
+            if 0:
+                for i in range(len(out_xy[0])):
+                    mask = (out_xy[0][i] == -1)
+                    out_xy[2][i][mask == 1] = -1
+
             seg_xy = test_unit.get_all_seg(out_xy)
             diff_xy = [(x[1] - x[0]) for x in list(zip(out_xy[2], out_xy[0]))]
 
@@ -183,7 +194,7 @@ for epoch in range(*args.nepochs):
                        #list(map(lambda x, y: overlap_red(x, y), diff_xy, seg_xy[2])),
                        ]
 
-            to_print(to_show, save_name=os.path.join("outputs/results", args.prj,
+            to_print(to_show, save_name=os.path.join("outputs/results", args.dataset, args.prj,
                                                      str(epoch) + '_' + str(alpha) + '_' + str(ii).zfill(4) + '.jpg'))
 
 

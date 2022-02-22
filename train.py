@@ -53,15 +53,21 @@ parser.add_argument('--port', type=str, default='dummy')
 engine = parser.parse_known_args()[0].engine
 GAN = getattr(__import__('engine.' + engine), engine).GAN
 parser = GAN.add_model_specific_args(parser)
-
-# Finalize Arguments
 opt = parser.parse_args()
-opt.prj = opt.dataset + '_' + opt.prj
-opt.not_tracking_hparams = ['mode', 'port', 'epoch_load', 'legacy', 'threads', 'test_batch_size']
-os.makedirs(os.environ.get('LOGS') + opt.dataset + '/', exist_ok=True)
-os.makedirs(os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/', exist_ok=True)
-save_json(opt, os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/' + opt.prj + '.json')
-shutil.copy('engine/' + opt.engine + '.py', os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/' + opt.engine + '.py')
+
+# Finalize Arguments and create files for logging
+def prepare_log(opt):
+    """
+    finalize arguments, creat a folder for logging, save argument in json
+    """
+    opt.not_tracking_hparams = ['mode', 'port', 'epoch_load', 'legacy', 'threads', 'test_batch_size']
+    os.makedirs(os.environ.get('LOGS') + opt.dataset + '/', exist_ok=True)
+    os.makedirs(os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/', exist_ok=True)
+    save_json(opt, os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/' + '0.json')
+    shutil.copy('engine/' + opt.engine + '.py', os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/' + opt.engine + '.py')
+    return opt
+
+opt = prepare_log(opt)
 
 #  Define Dataset Class
 from dataloader.data_multi import MultiData as Dataset
@@ -72,22 +78,24 @@ train_set = Dataset(root=os.environ.get('DATASET') + opt.dataset + '/train/',
                     opt=opt, mode='train')
 train_loader = DataLoader(dataset=train_set, num_workers=opt.threads, batch_size=opt.batch_size, shuffle=True)
 
-#  Pytorch Lightning Model
+#  Pytorch Lightning Module
 import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
+
 logger = pl_loggers.TensorBoardLogger(os.environ.get('LOGS') + opt.dataset + '/', name=opt.prj)
+checkpoints = os.path.join(os.environ.get('LOGS'), opt.dataset, opt.prj, 'checkpoints')
+os.makedirs(checkpoints, exist_ok=True)
 net = GAN(hparams=opt, train_loader=None,
-          test_loader=None, checkpoints=os.environ.get('CHECKPOINTS'))
+          test_loader=None, checkpoints=checkpoints)
 trainer = pl.Trainer(gpus=[0],  # distributed_backend='ddp',
                      max_epochs=opt.n_epochs, progress_bar_refresh_rate=20, logger=logger)
 trainer.fit(net, train_loader)#, test_loader)  # test loader not used during training
 
 
-# USAGE
+# Example Usage
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset TSE_DESS -b 16 --prj VryCycle --direction a_b --resize 286 --engine cyclegan --lamb 10 --unpaired
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset pain -b 16 --prj VryNS4B --direction aregis1_b --resize 286 --engine NS4 --netG attgan
-
 # CUDA_VISIBLE_DEVICES=0 python train.py --dataset FlyZ -b 16 --prj WpWn286B --direction xyweak%zyweak --resize 286 --engine cyclegan --lamb 10
-# CUDA_VISIBLE_DEVICES=1 python train.py --dataset FlyZ -b 16 --prj OpWp286 --direction xyweak_xyorisb --resize 286 --engine pix2pixNS
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset FlyZ -b 16 --prj WpOp256Mask --direction xyweak_xyorisb --resize 256 --engine pix2pixNS
 
 

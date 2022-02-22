@@ -323,8 +323,11 @@ if __name__ == '__main__':
     args.betas = (args.beta1, args.beta2)
     attgan = AttGAN(args)
 
-    netg = Generator(enc_dim=64, enc_layers=7, enc_norm_fn='batchnorm', enc_acti_fn='lrelu',
-                 dec_dim=64, dec_layers=7, dec_norm_fn='batchnorm', dec_acti_fn='relu',
-                 n_attrs=1, shortcut_layers=1, inject_layers=0, img_size=256)
+    #netg = Generator(enc_dim=64, enc_layers=7, enc_norm_fn='batchnorm', enc_acti_fn='lrelu',
+    #             dec_dim=64, dec_layers=7, dec_norm_fn='batchnorm', dec_acti_fn='relu',
+    #             n_attrs=1, shortcut_layers=1, inject_layers=0, img_size=256)
+
+    netg = Generator(enc_layers=3, dec_layers=3, enc_dim=64, dec_dim=64,
+                                   n_attrs=1, img_size=256)
 
     netd = Discriminators(img_size=256)

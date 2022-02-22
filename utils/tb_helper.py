@@ -11,7 +11,8 @@ def remove_runs_without_checkpoints(source):
             os.system('rm -rf ' + run)
 
 
-source = 'logs/'
+source = '/media/ExtHDD01/logs/FlyZ/'
+runs = glob.glob(source + '*/*/')
 
 remove_runs_without_checkpoints(source)
 
