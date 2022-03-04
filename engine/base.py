@@ -19,7 +19,6 @@ def _weights_init(m):
     if isinstance(m, nn.BatchNorm2d):
         torch.nn.init.normal_(m.weight, 0.0, 0.02)
         torch.nn.init.constant_(m.bias, 0)
-        torch.nn.init.constant_(m.bias, 0)
 
 
 class MRPretrained(nn.Module):
@@ -54,6 +53,15 @@ class MRPretrained(nn.Module):
         return out, features
 
 
+def combine(x, y, method):
+    if method == 'res':
+        return x + y
+    elif method == 'mul':
+        return torch.mul(x, y)
+    elif method == 'multanh':
+        return torch.mul((x + 1) / 2, y)
+
+
 class BaseModel(pl.LightningModule):
     def __init__(self, hparams, train_loader, test_loader, checkpoints):
         super(BaseModel, self).__init__()
@@ -76,7 +84,7 @@ class BaseModel(pl.LightningModule):
         # GENERATOR
         if self.hparams.netG == 'attgan':
             from models.AttGAN.attgan import Generator
-            print('use attgan discriminator')
+            print('use attgan generator')
             self.net_g = Generator(enc_dim=self.hparams.ngf, dec_dim=self.hparams.ngf,
                                    n_attrs=self.hparams.n_attrs, img_size=256,
                                    enc_norm_fn=self.hparams.norm, dec_norm_fn=self.hparams.norm,
@@ -84,7 +92,7 @@ class BaseModel(pl.LightningModule):
             self.net_g_inc = 1
         elif self.hparams.netG == 'descar':
             from models.DeScarGan.descargan import Generator
-            print('use descargan discriminator')
+            print('use descargan generator')
             if self.hparams.norm == 'batch':
                 usebatch = True
             elif self.hparams.norm == 'none':
@@ -149,7 +157,6 @@ class BaseModel(pl.LightningModule):
 
         # Final
         self.hparams.update(vars(self.hparams))   # updated hparams to be logged in tensorboard
-        #print(print_num_of_parameters(self.net_g))  # number of trainable parameters
 
     def configure_optimizers(self):
         netg_parameters = []
@@ -163,7 +170,6 @@ class BaseModel(pl.LightningModule):
         self.optimizer_g = optim.Adam(netg_parameters, lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
         self.optimizer_d = optim.Adam(netd_parameters, lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
         return [self.optimizer_d, self.optimizer_g], []
-
 
     def add_loss_adv(self, a, net_d, loss, coeff, truth, b=None, log=None, stacked=False):
         if stacked:

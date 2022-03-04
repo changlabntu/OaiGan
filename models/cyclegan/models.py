@@ -110,7 +110,7 @@ class Discriminator(nn.Module):
             layers.append(nn.LeakyReLU(0.2, inplace=True))
             return layers
 
-        if 0:
+        if 1:
             layers = [*discriminator_block(channels, 64, normalize=False),
                       *discriminator_block(64, 128)]
 

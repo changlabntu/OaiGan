@@ -23,7 +23,7 @@ class GAN(BaseModel):
 
         if self.hparams.res:
             #self.imgX0 = self.imgX0 + self.oriX
-            self.imgX0 = torch.mul(self.imgX0, self.oriX)
+            self.imgX0 = torch.mul((self.imgX0 + 1) / 2, self.oriX)
 
     def backward_g(self, inputs):
         # ADV(X0, Y)+
@@ -56,3 +56,6 @@ class GAN(BaseModel):
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset kl3 -b 16 --prj NS/0 --direction badKL3afterreg_gooodKL3reg --cropsize 256 --engine pix2pixNS
 
 # CUDA_VISIBLE_DEVICES=0 python train.py --dataset kl3 -b 16 --prj seg/res6L10 --direction badseg_goodseg --resize 384 --cropsize 256 --engine pix2pixNS --netG resnet_6blocks --lamb 0
+
+# Residual
+# CUDA_VISIBLE_DEVICES=0 python train.py --dataset womac3 -b 16 --prj N01/Unet32Res --direction aregis1_b --cropsize 256 --engine pix2pixNS --netG unet_32 --res --n01 --final sigmoid

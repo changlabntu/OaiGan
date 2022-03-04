@@ -19,6 +19,7 @@ import numpy as np
 
 sig = nn.Sigmoid()
 ACTIVATION = nn.ReLU
+c_dim = 2
 #device = 'cuda'
 
 
@@ -96,7 +97,7 @@ def conv2d_block(in_channels, out_channels, kernel=3, stride=1, padding=1, activ
 
 
 class Generator(nn.Module):
-    def __init__(self, n_channels=1, nf=32, batch_norm=True, activation=ACTIVATION, final='tanh', c_dim=2):
+    def __init__(self, n_channels=1, nf=32, batch_norm=True, activation=ACTIVATION, final='tanh'):
         super(Generator, self).__init__()
 
         conv_block = conv2d_bn_block if batch_norm else conv2d_block
@@ -104,10 +105,9 @@ class Generator(nn.Module):
         max_pool = nn.MaxPool2d(2)
         act = activation
         self.label_k = torch.tensor([0, 1]).half().cuda()
-        self.c_dim = 0
 
         self.down0 = nn.Sequential(
-            conv_block(n_channels + self.c_dim, nf, activation=act),
+            conv_block(n_channels + c_dim, nf, activation=act),
             conv_block(nf, nf, activation=act)
         )
         self.down1 = nn.Sequential(
@@ -159,12 +159,12 @@ class Generator(nn.Module):
 
     def forward(self, xori, a, res=False):
         x = 1 * xori
+
         # c: (B, C)
-        if self.c_dim > 0:
-            c = a
-            c1 = c.view(c.size(0), c.size(1), 1, 1)
-            c1 = c1.repeat(1, 1, x.size(2), x.size(3))  # (B, 2, H, W)
-            x = torch.cat([x, c1], dim=1)
+        c = a
+        c1 = c.view(c.size(0), c.size(1), 1, 1)
+        c1 = c1.repeat(1, 1, x.size(2), x.size(3))  # (B, 2, H, W)
+        x = torch.cat([x, c1], dim=1)
 
         x0 = self.down0(x)
         x1 = self.down1(x0)

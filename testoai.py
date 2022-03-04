@@ -117,10 +117,8 @@ class Pix2PixModel:
                 except:
                     output = self.net_g(in_img)[0]
 
-        if args.res:
-            #output = in_img + nn.Tanh()(output)
-            #output = in_img + (output)
-            output = torch.mul(in_img, output)
+        from engine.base import combine
+        output = combine(output, in_img, args.cmb)
 
         in_img = in_img.detach().cpu()[0, ::]
         out_img = out_img.detach().cpu()[0, ::]
@@ -203,12 +201,12 @@ parser.add_argument('--dataset', help='name of training dataset')
 parser.add_argument('--testset', help='name of testing dataset if different than the training dataset')
 parser.add_argument('--prj', type=str, help='NS/unet128_NoNorm')
 parser.add_argument('--direction', type=str, help='a_b')
-parser.add_argument('--unpaired', action='store_true', dest='unpaired', default=False)
 parser.add_argument('--netg', type=str)
 parser.add_argument('--resize', type=int)
 parser.add_argument('--cropsize', type=int)
 parser.add_argument('--t2d', action='store_true', dest='t2d', default=False)
-parser.add_argument('--res', action='store_true', dest='res')
+parser.add_argument('--cmb', type=str, default='none', help='way to combine output to the input')
+parser.add_argument('--n01', action='store_true', dest='n01')
 parser.add_argument('--flip', action='store_true', dest='flip')
 parser.add_argument('--eval', action='store_true', dest='eval')
 parser.add_argument('--nepochs', default=(30, 40, 10), nargs='+', help='which checkpoints to be interfered with', type=int)

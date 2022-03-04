@@ -10,6 +10,21 @@ from torch.optim import lr_scheduler
 ###############################################################################
 
 
+def get_activation(fn):
+    if fn == 'none':
+        return Identity
+    elif fn == 'relu':
+        return nn.ReLU
+    elif fn == 'lrelu':
+        return nn.LeakyReLU(0.01)  # pix2pix use 0.2
+    elif fn == 'sigmoid':
+        return nn.Sigmoid
+    elif fn == 'tanh':
+        return nn.Tanh
+    else:
+        raise Exception('Unsupported activation function: ' + str(fn))
+
+
 class Identity(nn.Module):
     def forward(self, x):
         return x
@@ -122,7 +137,8 @@ def init_net(net, init_type='normal', init_gain=0.02, gpu_ids=[]):
     return net
 
 
-def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[]):
+def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, init_type='normal', init_gain=0.02, gpu_ids=[],
+             final='tanh'):
     """Create a generator
 
     Parameters:
@@ -153,17 +169,17 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
     norm_layer = get_norm_layer(norm_type=norm)
 
     if netG == 'resnet_9blocks':
-        net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9)
+        net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=9, final=final)
     elif netG == 'resnet_6blocks':
-        net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=6)
+        net = ResnetGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=6, final=final)
     elif netG == 'unet_32':
-        net = UnetGenerator(input_nc, output_nc, 5, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+        net = UnetGenerator(input_nc, output_nc, 5, ngf, norm_layer=norm_layer, use_dropout=use_dropout, final=final)
     elif netG == 'unet_64':
-        net = UnetGenerator(input_nc, output_nc, 6, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+        net = UnetGenerator(input_nc, output_nc, 6, ngf, norm_layer=norm_layer, use_dropout=use_dropout, final=final)
     elif netG == 'unet_128':
-        net = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+        net = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout, final=final)
     elif netG == 'unet_256':
-        net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+        net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout, final=final)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -223,7 +239,7 @@ class ResnetGenerator(nn.Module):
     We adapt Torch code and idea from Justin Johnson's neural style transfer project(https://github.com/jcjohnson/fast-neural-style)
     """
 
-    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6, padding_type='reflect'):
+    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6, padding_type='reflect', final='tanh'):
         """Construct a Resnet-based generator
 
         Parameters:
@@ -269,7 +285,9 @@ class ResnetGenerator(nn.Module):
                       nn.ReLU(True)]
         model += [nn.ReflectionPad2d(3)]
         model += [nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0)]
-        model += [nn.Tanh()]
+        final_layer = get_activation(final)
+        model += [final_layer()]
+        #model += [nn.Tanh()]
 
         self.model = nn.Sequential(*model)
 
@@ -341,7 +359,7 @@ class ResnetBlock(nn.Module):
 class UnetGenerator(nn.Module):
     """Create a Unet-based generator"""
 
-    def __init__(self, input_nc, output_nc, num_downs, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False):
+    def __init__(self, input_nc, output_nc, num_downs, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, final='tanh'):
         """Construct a Unet generator
         Parameters:
             input_nc (int)  -- the number of channels in input images
@@ -364,6 +382,8 @@ class UnetGenerator(nn.Module):
         unet_block = UnetSkipConnectionBlock(ngf * 2, ngf * 4, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
         unet_block = UnetSkipConnectionBlock(ngf, ngf * 2, input_nc=None, submodule=unet_block, norm_layer=norm_layer)
         self.model = UnetSkipConnectionBlock(output_nc, ngf, input_nc=input_nc, submodule=unet_block, outermost=True, norm_layer=norm_layer)  # add the outermost layer
+        final_layer = get_activation(final)
+        self.model.model[4] = final_layer()
 
     def forward(self, input):
         """Standard forward"""
@@ -522,11 +542,13 @@ class PixelDiscriminator(nn.Module):
 
 
 if __name__ == '__main__':
-    g = UnetGenerator(input_nc=3, output_nc=3, num_downs=8, ngf=64, norm_layer=nn.BatchNorm2d,
-                                    use_dropout=True).cuda()
-   #from torchsummary import summary
-    from utils.data_utils import print_num_of_parameters
-    print_num_of_parameters(g)
+    r = define_G(input_nc=3, output_nc=3, ngf=32, netG='resnet_6blocks', norm='batch', use_dropout=False, final='tanh')
+    u = define_G(input_nc=3, output_nc=3, ngf=32, netG='unet_128', norm='instance', use_dropout=False, final='sigmoid')
+    #g = UnetGenerator(input_nc=3, output_nc=3, num_downs=8, ngf=64, norm_layer=nn.BatchNorm2d,
+    #                                use_dropout=True, final='sigmoid').cuda()
+    #from torchsummary import summary
+    #from utils.data_utils import print_num_of_parameters
+    #print_num_of_parameters(g)
     #summary(g, [(3, 256, 256)])
-    d = NLayerDiscriminator(input_nc=1, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d)
-    print(d(torch.rand(1, 1, 256, 256))[0].shape)
+    #d = NLayerDiscriminator(input_nc=1, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d)
+    #print(d(torch.rand(1, 1, 256, 256))[0].shape)

@@ -128,13 +128,13 @@ class PairedData(data.Dataset):
         return len(self.images)
 
     def load_img(self, path):
-        x = Image.open(path) #(DESS: 294>286) (PAIN: 224>286)
-        x = np.array(x).astype(np.float32)#[:, :, :3]
-        #x[x<=50] = 0
+        x = Image.open(path)  #(DESS: 294>286) (PAIN: 224>286)
+        x = np.array(x).astype(np.float32)
         if x.max() > 0:  # scale to 0-1
             x = x / x.max()
-        if len(x.shape) == 2: # if grayscale
-            x = np.concatenate([np.expand_dims(x, 2)]*3, 2)
+        if len(x.shape) == 2:  # if grayscale
+            x = np.expand_dims(x, 2)
+        x = np.concatenate([x]*3, 2)
         return x
 
     def __getitem__(self, index):
@@ -146,9 +146,10 @@ class PairedData(data.Dataset):
 
         outputs = ()
         for k in list(augmented.keys()):
-            outputs = outputs + (transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(augmented[k]), )
-            #outputs = outputs + (augmented[k], )
-
+            if self.opt.n01:
+                outputs = outputs + (augmented[k],)
+            else:
+                outputs = outputs + (transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(augmented[k]), )
         return outputs
 
 
@@ -170,13 +171,6 @@ def save_segmentation(dataset, names, destination, use_t2d):
         tiff.imsave(destination + names[i], out)
 
 
-def save_masked(dataset, names, destination, use_t2d):
-    for i in range(len(dataset)):
-        x, mask = dataset.__getitem__(i)[0].unsqueeze(0).cuda()
-        #mask =
-        tiff.imsave(destination + names[i], out)
-
-
 if __name__ == '__main__':
     from dotenv import load_dotenv
     import argparse
@@ -192,6 +186,8 @@ if __name__ == '__main__':
     parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
     parser.add_argument('--resize', type=int, default=0)
     parser.add_argument('--cropsize', type=int, default=0)
+    parser.add_argument('--n01', action='store_true', dest='n01', default=False)
+    parser.add_argument('--gray', action='store_true', dest='gray', default=False, help='only use 1 channel')
     parser.add_argument('--mode', type=str, default='dummy')
     parser.add_argument('--port', type=str, default='dummy')
     opt = parser.parse_args()
@@ -201,7 +197,9 @@ if __name__ == '__main__':
     source = 'b'
     destination = 'bseg/'
     opt.direction = source
+    opt.gray = True
     dataset = MultiData(root=root, path=opt.direction, opt=opt, mode='test')
+    x = dataset.__getitem__(10)
 
     #  Dataset
     if 0:

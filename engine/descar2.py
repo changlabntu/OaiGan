@@ -11,7 +11,7 @@ import pytorch_lightning as pl
 from utils.metrics_segmentation import SegmentationCrossEntropyLoss
 from utils.metrics_classification import CrossEntropyLoss, GetAUC
 from utils.data_utils import *
-from engine.base import BaseModel
+from engine.base import BaseModel, combine
 
 
 class GAN(BaseModel):
@@ -33,6 +33,10 @@ class GAN(BaseModel):
         self.oriY = self.batch[1]
 
         self.imgX0, self.imgX1 = self.net_g(self.oriX, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())
+
+        if self.hparams.cmb is not None:
+            self.imgX0 = combine(self.imgX0, self.oriX, method=self.hparams.cmb)
+            self.imgX1 = combine(self.imgX1, self.oriX, method=self.hparams.cmb)
 
     def backward_g(self, inputs):
         # ADV(X0)+
@@ -70,3 +74,5 @@ class GAN(BaseModel):
         return loss_d
 
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset womac3 -b 16 --prj descar2/GDdescarNoL1 --direction aregis1_b --cropsize 256 --engine descar2 --netG descar --netD descar
+
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset womac3 -b 16 --prj N01/DescarRes --direction aregis1_b --cropsize 256 --engine descar2 --netG descar --netD patch_7 --res --n01 --final sigmoid --cmb mul

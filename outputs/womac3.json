@@ -12,6 +12,7 @@
     "irange": [14, 24, 45, 190, 270, 283, 403, 459, 503],
     "flip": false,
     "eval": false,
+    "n01": false,
     "nepochs": [
         0,
         210,
