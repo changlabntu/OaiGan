@@ -215,7 +215,7 @@ class GAN(nn.Module):
 
         # Inline gradient penalty
         alpha = torch.rand(img_a.size(0), 1, 1, 1)
-        alpha = alpha.cuda(async=self.multi_gpu) if self.gpu else alpha
+        alpha = alpha.cuda()#async=self.multi_gpu) if self.gpu else alpha
         mix_tar = (alpha * img_a + (1 - alpha) * img_a2b).requires_grad_(True)  # interpolates
         mix_outputs, _ = self.D(img_a, mix_tar, z_ab)
         gradients = autograd.grad(
@@ -386,3 +386,7 @@ class D(nn.Module):
             h = self.conv_int(h)
             y = h.view(h.size(0), -1).mean(1, keepdim=True)  # Global average pooling
             return y
+
+
+if __name__ == '__main__':
+    g = G(n_c=3, n_z=10, n_repeat=6)

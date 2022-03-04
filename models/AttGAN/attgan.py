@@ -15,9 +15,9 @@ MAX_DIM = 64 * 16  # 1024
 
 
 class Generator(nn.Module): #layers was 5
-    def __init__(self, enc_dim=64, enc_layers=5, enc_norm_fn='batchnorm', enc_acti_fn='lrelu',
-                 dec_dim=64, dec_layers=5, dec_norm_fn='batchnorm', dec_acti_fn='relu',
-                 n_attrs=1, shortcut_layers=1, inject_layers=0, img_size=128):
+    def __init__(self, enc_dim=64, enc_layers=5, enc_norm_fn='batch', enc_acti_fn='lrelu',
+                 dec_dim=64, dec_layers=5, dec_norm_fn='batch', dec_acti_fn='relu',
+                 n_attrs=1, shortcut_layers=1, inject_layers=0, img_size=128, final='tanh'):
         super(Generator, self).__init__()
         self.shortcut_layers = min(shortcut_layers, dec_layers - 1)
         self.inject_layers = min(inject_layers, dec_layers - 1)
@@ -46,7 +46,7 @@ class Generator(nn.Module): #layers was 5
                 n_in = n_in + n_attrs if self.inject_layers > i else n_in
             else:
                 layers += [ConvTranspose2dBlock(
-                    n_in, 3, (4, 4), stride=2, padding=1, norm_fn='none', acti_fn='tanh'
+                    n_in, 3, (4, 4), stride=2, padding=1, norm_fn='none', acti_fn=final
                 )]
         self.dec_layers = nn.ModuleList(layers)
 
@@ -84,7 +84,7 @@ class Generator(nn.Module): #layers was 5
 
 class Discriminators(nn.Module):
     # No instancenorm in fcs in source code, which is different from paper.
-    def __init__(self, dim=64, norm_fn='instancenorm', acti_fn='lrelu',
+    def __init__(self, dim=64, norm_fn='instance', acti_fn='lrelu',
                  fc_dim=1024, fc_norm_fn='none', fc_acti_fn='lrelu', n_layers=5, img_size=128, cls=13):
         super(Discriminators, self).__init__()
         self.f_size = img_size // 2 ** n_layers
@@ -299,9 +299,9 @@ if __name__ == '__main__':
     parser.add_argument('--enc_layers', dest='enc_layers', type=int, default=5)
     parser.add_argument('--dec_layers', dest='dec_layers', type=int, default=5)
     parser.add_argument('--dis_layers', dest='dis_layers', type=int, default=5)
-    parser.add_argument('--enc_norm', dest='enc_norm', type=str, default='batchnorm')
-    parser.add_argument('--dec_norm', dest='dec_norm', type=str, default='batchnorm')
-    parser.add_argument('--dis_norm', dest='dis_norm', type=str, default='instancenorm')
+    parser.add_argument('--enc_norm', dest='enc_norm', type=str, default='batch')
+    parser.add_argument('--dec_norm', dest='dec_norm', type=str, default='batch')
+    parser.add_argument('--dis_norm', dest='dis_norm', type=str, default='instance')
     parser.add_argument('--dis_fc_norm', dest='dis_fc_norm', type=str, default='none')
     parser.add_argument('--enc_acti', dest='enc_acti', type=str, default='lrelu')
     parser.add_argument('--dec_acti', dest='dec_acti', type=str, default='relu')
@@ -328,6 +328,7 @@ if __name__ == '__main__':
     #             n_attrs=1, shortcut_layers=1, inject_layers=0, img_size=256)
 
     netg = Generator(enc_layers=3, dec_layers=3, enc_dim=64, dec_dim=64,
-                                   n_attrs=1, img_size=256)
+                                   n_attrs=1, img_size=256, final='tanh')
 
-    netd = Discriminators(img_size=256)
+    #netd = Discriminators(img_size=256)
+    #print(netd(torch.rand(1, 6, 256, 256))[0].shape)

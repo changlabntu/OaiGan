@@ -1,12 +1,12 @@
 {
     "dataset": "kl3",
     "testset": "kl3/test/",
-    "direction": "badKL3reg_goodKL3reg",
-    "prj": "NS/0",
+    "direction": "badseg_goodseg",
+    "prj": "seg/unet128",
     "netg": "netG",
     "resize": 384,
     "t2d": false,
-    "cropsize": 384,
+    "cropsize": 256,
     "irange": [
         19,
         14,
@@ -37,3 +37,5 @@
     "mode": "client",
     "port": "45727"
 }
+
+

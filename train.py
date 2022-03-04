@@ -5,10 +5,22 @@ from torch.utils.data import DataLoader
 import os, shutil, copy
 from dotenv import load_dotenv
 from utils.make_config import *
-load_dotenv('.env')
+
+def prepare_log(opt):
+    """
+    finalize arguments, creat a folder for logging, save argument in json
+    """
+    opt.not_tracking_hparams = ['mode', 'port', 'epoch_load', 'legacy', 'threads', 'test_batch_size']
+    os.makedirs(os.environ.get('LOGS') + opt.dataset + '/', exist_ok=True)
+    os.makedirs(os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/', exist_ok=True)
+    save_json(opt, os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/' + '0.json')
+    shutil.copy('engine/' + opt.engine + '.py', os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/' + opt.engine + '.py')
+    return opt
 
 # Arguments
 parser = argparse.ArgumentParser()#add_help=False)
+# Env
+parser.add_argument('--env', type=str, default=None, help='environment_to_use')
 # Project name
 parser.add_argument('--prj', type=str, default='', help='name of the project')
 parser.add_argument('--engine', dest='engine', type=str, default='mydcgan', help='use which engine')
@@ -22,13 +34,16 @@ parser.add_argument('--cropsize', type=int, default=256, help='size for cropping
 # Model
 parser.add_argument('--gan_mode', type=str, default='vanilla', help='gan mode')
 parser.add_argument('--netG', type=str, default='unet_256', help='netG model')
+parser.add_argument('--norm', type=str, default='batch', help='normalization in generator')
 parser.add_argument('--mc', action='store_true', dest='mc', default=False, help='monte carlo dropout for pix2pix generator')
-parser.add_argument('--netD', type=str, default='patchgan_16', help='netD model')
+parser.add_argument('--res', action='store_true', dest='res', default=False, help='generate as residual (x1=out+x0)')
+parser.add_argument('--netD', type=str, default='patch_16', help='netD model')
 parser.add_argument('--input_nc', type=int, default=3, help='input image channels')
 parser.add_argument('--output_nc', type=int, default=3, help='output image channels')
 parser.add_argument('--ngf', type=int, default=64, help='generator filters in first conv layer')
 parser.add_argument('--ndf', type=int, default=64, help='discriminator filters in first conv layer')
 parser.add_argument("--n_attrs", type=int, default=1)
+parser.add_argument('--final', type=str, dest='final', default='tanh', help='activation of final layer')
 # Training
 parser.add_argument('-b', dest='batch_size', type=int, default=1, help='training batch size')
 parser.add_argument('--test_batch_size', type=int, default=1, help='testing batch size')
@@ -55,18 +70,13 @@ GAN = getattr(__import__('engine.' + engine), engine).GAN
 parser = GAN.add_model_specific_args(parser)
 opt = parser.parse_args()
 
-# Finalize Arguments and create files for logging
-def prepare_log(opt):
-    """
-    finalize arguments, creat a folder for logging, save argument in json
-    """
-    opt.not_tracking_hparams = ['mode', 'port', 'epoch_load', 'legacy', 'threads', 'test_batch_size']
-    os.makedirs(os.environ.get('LOGS') + opt.dataset + '/', exist_ok=True)
-    os.makedirs(os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/', exist_ok=True)
-    save_json(opt, os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/' + '0.json')
-    shutil.copy('engine/' + opt.engine + '.py', os.environ.get('LOGS') + opt.dataset + '/' + opt.prj + '/' + opt.engine + '.py')
-    return opt
+# environment file
+if opt.env is not None:
+    load_dotenv('.' + opt.env)
+else:
+    load_dotenv('.env')
 
+# Finalize Arguments and create files for logging
 opt = prepare_log(opt)
 
 #  Define Dataset Class

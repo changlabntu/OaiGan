@@ -10,8 +10,15 @@ from dotenv import load_dotenv
 from utils.data_utils import norm_01
 from skimage import io
 import torchvision.transforms as transforms
+import torch.nn as nn
 
-load_dotenv('.env')
+import numpy as np
+import matplotlib.pyplot as plt
+cm = plt.get_cmap('viridis')
+
+
+def to_heatmap(x):
+    return cm(x)
 
 
 def overlap_red(x0, y0):
@@ -53,11 +60,9 @@ class Pix2PixModel:
                                 path=args.direction,
                                 opt=args, mode='test')
 
-        os.makedirs(os.path.join("outputs/results", args.dataset, args.prj), exist_ok=True)
-
         #self.seg_model = torch.load(os.environ.get('model_seg')).cuda()
-        self.seg_cartilage = torch.load('submodels/oai_cartilage_384.pth')#model_seg_ZIB.pth')
-        #self.seg_cartilage = torch.load('submodels/model_seg_ZIB_res18_256.pth')
+        #self.seg_cartilage = torch.load('submodels/oai_cartilage_384.pth')#model_seg_ZIB.pth')
+        self.seg_cartilage = torch.load('submodels/model_seg_ZIB_res18_256.pth')
         self.seg_bone = torch.load('submodels/model_seg_ZIB.pth')
         #self.cartilage = torch.load('submodels/femur_tibia_fc_tc.pth').cuda()
         self.netg_t2d = torch.load('submodels/tse_dess_unet32.pth')
@@ -68,7 +73,7 @@ class Pix2PixModel:
 
         #self.magic256 = torch.load('/media/ExtHDD01/checkpoints/FlyZ_WpOp/netG_model_epoch_170.pth').cuda()
         #self.magic286 = torch.load('/media/ExtHDD01/checkpoints/FlyZ_WpOp/netG_model_epoch_170.pth').cuda()
-        self.magic286 = torch.load('/media/ExtHDD01/checkpointsold/FlyZ_WpOp286Mask/netG_model_epoch_10.pth').cuda()
+        #self.magic286 = torch.load('/media/ExtHDD01/checkpointsold/FlyZ_WpOp286Mask/netG_model_epoch_10.pth').cuda()
 
         self.device = torch.device("cuda:0")
 
@@ -98,17 +103,24 @@ class Pix2PixModel:
 
         alpha = alpha / 100
 
-        try:
+        try: ## descargan new
             output0, output1 = self.net_g(in_img, alpha * torch.ones(1, 2).cuda())
-            output = output0 #- output0
+            output = output0# - output0
+
         except:
-            try:
+            try: ## descargan
                 output = self.net_g(in_img, alpha * torch.ones(1, 2).cuda())[0]
             except:
-                try:
+                try: ## attgan
+                    self.net_g.f_size = args.cropsize // 32
                     output = self.net_g(in_img, alpha * torch.ones(1, 1).cuda())[0]
                 except:
                     output = self.net_g(in_img)[0]
+
+        if args.res:
+            #output = in_img + nn.Tanh()(output)
+            #output = in_img + (output)
+            output = torch.mul(in_img, output)
 
         in_img = in_img.detach().cpu()[0, ::]
         out_img = out_img.detach().cpu()[0, ::]
@@ -152,9 +164,10 @@ class Pix2PixModel:
 
 
 def to_print(to_show, save_name):
-
+    os.makedirs(os.path.join("outputs/results", args.dataset, args.prj), exist_ok=True)
     to_show = [torch.cat(x, len(x[0].shape) - 1) for x in to_show]
     to_show = [x - x.min() for x in to_show]
+    to_show = [x / x.max() for x in to_show]
 
     for i in range(len(to_show)):
         if len(to_show[i].shape) == 2:
@@ -164,21 +177,41 @@ def to_print(to_show, save_name):
     imagesc(to_print, show=False, save=save_name)
 
 
+def seperate_by_seg(x, seg_used, masked, if_absolute, threshold, rgb):
+    out = []
+    for n in range(len(x)):
+        a = 1 * x[n]
+        if if_absolute:
+            a[a < 0] = 0
+        for c in masked:
+            a[:, seg_used[n] == c] = 0
+        if threshold > 0:
+            a[a > threshold] = threshold
+        a = a / a.max()
+        if rgb:
+            a = np.transpose(cm(a[0, ::]), (2, 0, 1))[:3, ::]
+            a = torch.from_numpy(a)
+        out.append(a)
+    return out
+
+
 # Command Line Argument
 parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
+parser.add_argument('--env', type=str, default=None, help='environment_to_use')
 parser.add_argument('--jsn', type=str, default='womac3', help='name of ini file')
 parser.add_argument('--dataset', help='name of training dataset')
 parser.add_argument('--testset', help='name of testing dataset if different than the training dataset')
-parser.add_argument('--prj', type=str, help='prjname')
-parser.add_argument('--direction', type=str, help='a2b or b2a')
+parser.add_argument('--prj', type=str, help='NS/unet128_NoNorm')
+parser.add_argument('--direction', type=str, help='a_b')
 parser.add_argument('--unpaired', action='store_true', dest='unpaired', default=False)
 parser.add_argument('--netg', type=str)
 parser.add_argument('--resize', type=int)
 parser.add_argument('--cropsize', type=int)
 parser.add_argument('--t2d', action='store_true', dest='t2d', default=False)
+parser.add_argument('--res', action='store_true', dest='res')
 parser.add_argument('--flip', action='store_true', dest='flip')
 parser.add_argument('--eval', action='store_true', dest='eval')
-parser.add_argument('--nepochs', default=(190, 200, 10), nargs='+', help='which checkpoints to be interfered with', type=int)
+parser.add_argument('--nepochs', default=(30, 40, 10), nargs='+', help='which checkpoints to be interfered with', type=int)
 parser.add_argument('--nalpha', default=(0, 100, 1), nargs='+', help='range of additional input parameter for generator', type=int)
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
@@ -187,6 +220,14 @@ with open('outputs/' + parser.parse_args().jsn + '.json', 'rt') as f:
     t_args = argparse.Namespace()
     t_args.__dict__.update(json.load(f))
     args = parser.parse_args(namespace=t_args)
+
+print(args.cropsize)
+
+# environment file
+if args.env is not None:
+    load_dotenv('.' + args.env)
+else:
+    load_dotenv('.env')
 
 if len(args.nepochs) == 1:
     args.nepochs = [args.nepochs[0], args.nepochs[0]+1, 1]
@@ -200,6 +241,10 @@ for epoch in range(*args.nepochs):
     test_unit.get_model(epoch, eval=args.eval)
     for ii in range(1):#range(len(test_unit.test_set)):
         #args.irange = [ii]
+
+        seg0_all = []
+        seg1_all = []
+
         for alpha in np.linspace(*args.nalpha):
             out_xy = list(map(lambda v: test_unit.get_one_output(v, 'x', alpha), args.irange))
             out_xy = list(zip(*out_xy))
@@ -207,46 +252,57 @@ for epoch in range(*args.nepochs):
             seg_xy = test_unit.get_all_seg(out_xy)
             diff_xy = [(x[1] - x[0]) for x in list(zip(out_xy[2], out_xy[0]))]
 
-            diff_xy[0][0, 0, 0] = 2
-            diff_xy[0][0, 0, 1] = -2
+            #diff_xy[0][0, 0, 0] = 1.5
+            #diff_xy[0][0, 0, 1] = -1.5
 
-            x_seg = []
-            for n in range(len(diff_xy)):
-                seg_use = seg_xy[0][n]
-                a = 1 * out_xy[0][n]
-                #a[a < 0] = 0
-                a = a / a.max()
-                #a[:, seg_use == 0] = 0
-                #a[:, seg_use == 2] = 0
-                #a[:, seg_use == 4] = 0
-                x_seg.append(a)
+            #for i in range(len(diff_xy)):
+                #diff_xy[i][diff_xy[i] > 0.2] = 0.2
+                #diff_xy[i][diff_xy[i] < -0.2] = -0.2
 
-            diff_seg = []
-            for n in range(len(diff_xy)):
-                seg_use = seg_xy[2][n]
-                a = 1 * diff_xy[n]
-                a[a < 0] = 0
-                a[:, seg_use == 0] = 0
-                a[:, seg_use == 2] = 0
-                a[:, seg_use == 4] = 0
-                diff_seg.append(a)
+                #diff_xy[i] = diff_xy[i] - diff_xy[i].min()
+            #    diff_xy[i] = diff_xy[i] / diff_xy[i].max()
+
+            ooo = [x - x.min() for x in out_xy[0]]
+
+            tag = True
+            x0 = seperate_by_seg(x=ooo, seg_used=seg_xy[0], masked=[0, 2, 4], if_absolute=tag, threshold=0, rgb=tag)
+            diffseg0 = seperate_by_seg(x=diff_xy, seg_used=seg_xy[0], masked=[0, 2, 4], if_absolute=tag, threshold=0, rgb=tag)
+            diffseg1 = seperate_by_seg(x=diff_xy, seg_used=seg_xy[0], masked=[1, 3], if_absolute=tag, threshold=0, rgb=tag)
+
+            seg0_all.append(np.expand_dims(np.concatenate([x[:1, ::] for x in diffseg0], 0), 3))
+            seg1_all.append(np.expand_dims(np.concatenate([x[:1, ::] for x in diffseg1], 0), 3))
+
+            #diffseg0 = [abs(x) for x in diffseg0]
+            #diffseg1 = [abs(x) for x in diffseg1]
 
             to_show = [out_xy[0],
                        #seg_xy[0],
-                       list(map(lambda x, y: overlap_red(x, y), out_xy[0], seg_xy[0])),
+                       #list(map(lambda x, y: overlap_red(x, y), out_xy[0], seg_xy[0])),
                        #out_xy[1],
                        #seg_xy[1],
-                       list(map(lambda x, y: overlap_red(x, y), out_xy[1], seg_xy[1])),
+                       #list(map(lambda x, y: overlap_red(x, y), out_xy[1], seg_xy[1])),
                        out_xy[2],
-                       #seg_xy[2]
+                       #seg_xy[2],
                        #diff_xy,
                        #x_seg,
-                       diff_seg,
-                       list(map(lambda x, y: overlap_red(x, y), diff_xy, seg_xy[2])),
+                       #x0,
+                       diffseg0,
+                       diffseg1
+                       #list(map(lambda x, y: overlap_red(x, y), diff_xy, seg_xy[2])),
                        ]
 
             to_print(to_show, save_name=os.path.join("outputs/results", args.dataset, args.prj,
                                                      str(epoch) + '_' + str(alpha) + '_' + str(ii).zfill(4) + '.jpg'))
+
+        seg0_all = np.concatenate(seg0_all, 3)
+        seg1_all = np.concatenate(seg1_all, 3)
+
+        print(seg0_all.shape)
+        print(seg1_all.shape)
+
+        #np.save('seg0.npy', seg0_all)
+        #np.save('seg1.npy', seg1_all)
+
     #except:
     #    print('failed for some reason')
 

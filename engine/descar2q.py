@@ -32,7 +32,10 @@ class GAN(BaseModel):
         self.oriX = self.batch[0]
         self.oriY = self.batch[1]
 
-        self.imgX0, self.imgX1 = self.net_g(self.oriX, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())
+        self.net_g.eval()
+        self.imgX0 = self.net_g(self.oriX)[0]
+        self.net_g.train()
+        self.imgX1 = self.net_g(self.oriX)[0]
 
     def backward_g(self, inputs):
         # ADV(X0)+

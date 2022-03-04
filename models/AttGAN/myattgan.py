@@ -1,4 +1,4 @@
-# Copyright (C) 2018 Elvis Yu-Jing Lin <elvisyjlin@gmail.com>![](../../outputs/results/womac3/NS/Gdescar/130_0.0_0000.jpg)
+# Copyright (C) 2018 Elvis Yu-Jing Lin <elvisyjlin@gmail.com>
 #
 # This work is licensed under the MIT License. To view a copy of this license,
 # visit https://opensource.org/licenses/MIT.
@@ -7,7 +7,7 @@
 
 import torch
 import torch.nn as nn
-from models.AttGAN.mynn import LinearBlock, Conv2dBlock, ConvTranspose2dBlock
+from models.AttGAN.nn import LinearBlock, Conv2dBlock, ConvTranspose2dBlock
 
 # This architecture is for images of 128x128s
 # In the original AttGAN, slim.conv2d uses padding 'same'
@@ -60,7 +60,7 @@ class Generator(nn.Module): #layers was 5
 
     def decode(self, zs, a):
         a_tile = a.view(a.size(0), -1, 1, 1).repeat(1, 1, self.f_size, self.f_size)
-        z = torch.cat([zs[-1], a_tile], dim=1)  # add one
+        z = torch.cat([zs[-1], a_tile], dim=1)
         for i, layer in enumerate(self.dec_layers):
             z = layer(z)
             if self.shortcut_layers > i:  # Concat 1024 with 512
@@ -323,8 +323,14 @@ if __name__ == '__main__':
     args.betas = (args.beta1, args.beta2)
     attgan = AttGAN(args)
 
-    netg = Generator(enc_dim=64, enc_layers=7, enc_norm_fn='batchnorm', enc_acti_fn='lrelu',
-                 dec_dim=64, dec_layers=7, dec_norm_fn='batchnorm', dec_acti_fn='relu',
-                 n_attrs=1, shortcut_layers=1, inject_layers=0, img_size=256)
+    #netg = Generator(enc_dim=64, enc_layers=7, enc_norm_fn='batchnorm', enc_acti_fn='lrelu',
+    #             dec_dim=64, dec_layers=7, dec_norm_fn='batchnorm', dec_acti_fn='relu',
+    #             n_attrs=1, shortcut_layers=1, inject_layers=0, img_size=256)
+
+    netg = Generator(enc_layers=5, dec_layers=5, enc_dim=64, dec_dim=64,
+                                   n_attrs=1, img_size=256)
 
     netd = Discriminators(img_size=256)
+    #print(netg.f_size)
+    netg.f_size = 12
+    netg(torch.rand(7, 3, 384, 384), torch.ones(7))[0].shape

@@ -78,30 +78,30 @@ class BaseModel(pl.LightningModule):
             from models.AttGAN.attgan import Generator
             print('use attgan discriminator')
             self.net_g = Generator(enc_dim=self.hparams.ngf, dec_dim=self.hparams.ngf,
-                                   n_attrs=self.hparams.n_attrs, img_size=256)
-            self.net_g_inc = 1
-        elif self.hparams.netG == 'myattgan':
-            from models.AttGAN.attgan import Generator
-            print('use myattgan discriminator')
-            self.net_g = Generator(enc_dim=self.hparams.ngf, dec_dim=self.hparams.ngf,
-                                   n_attrs=self.hparams.n_attrs, img_size=256)
+                                   n_attrs=self.hparams.n_attrs, img_size=256,
+                                   enc_norm_fn=self.hparams.norm, dec_norm_fn=self.hparams.norm,
+                                   final=self.hparams.final)
             self.net_g_inc = 1
         elif self.hparams.netG == 'descar':
             from models.DeScarGan.descargan import Generator
             print('use descargan discriminator')
-            self.net_g = Generator(n_channels=3)  ## i am using 32!
+            if self.hparams.norm == 'batch':
+                usebatch = True
+            elif self.hparams.norm == 'none':
+                usebatch = False
+            self.net_g = Generator(n_channels=3, batch_norm=usebatch, final=self.hparams.final)
             self.net_g_inc = 2
         else:
             self.net_g = define_G(input_nc=self.hparams.input_nc, output_nc=self.hparams.output_nc,
                                   ngf=self.hparams.ngf, netG=self.hparams.netG,
-                                  norm='batch', use_dropout=self.hparams.mc, init_type='normal', init_gain=0.02, gpu_ids=[])
+                                  norm=self.hparams.norm, use_dropout=self.hparams.mc, init_type='normal', init_gain=0.02, gpu_ids=[])
             self.net_g_inc = 0
 
         # DISCRIMINATOR
         # Patchgan from cyclegan (pix2pix one is strange)
-        if (self.hparams.netD).startswith('patchgan'):
+        if (self.hparams.netD).startswith('patch'):
             from models.cyclegan.models import Discriminator
-            self.net_d = Discriminator(input_shape=(6, 256, 256), patch=(self.hparams.netD).split('_')[-1])
+            self.net_d = Discriminator(input_shape=(6, 256, 256), patch=int((self.hparams.netD).split('_')[-1]))
         elif self.hparams.netD == 'sagan':
             from models.sagan.sagan import Discriminator
             print('use sagan discriminator')
@@ -149,7 +149,7 @@ class BaseModel(pl.LightningModule):
 
         # Final
         self.hparams.update(vars(self.hparams))   # updated hparams to be logged in tensorboard
-        print(print_num_of_parameters(self.net_g))  # number of trainable parameters
+        #print(print_num_of_parameters(self.net_g))  # number of trainable parameters
 
     def configure_optimizers(self):
         netg_parameters = []
@@ -164,11 +164,6 @@ class BaseModel(pl.LightningModule):
         self.optimizer_d = optim.Adam(netd_parameters, lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
         return [self.optimizer_d, self.optimizer_g], []
 
-    #@staticmethod
-    #def add_model_specific_args(parent_parser):
-    #    parser = parent_parser.add_argument_group("LitModel")
-    #    parser.add_argument("--n_attrs", type=int, default=1)
-    #    return parent_parser
 
     def add_loss_adv(self, a, net_d, loss, coeff, truth, b=None, log=None, stacked=False):
         if stacked:
@@ -233,3 +228,4 @@ class BaseModel(pl.LightningModule):
     def backward_d(self, inputs):
         return 0
 
+# CUDA_VISIBLE_DEVICES=2 python train.py --dataset womac3 -b 16 --prj NS/unet128 --direction aregis1_b --cropsize 256 --engine pix2pixNS --netG unet_128

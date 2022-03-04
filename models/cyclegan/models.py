@@ -95,12 +95,12 @@ class GeneratorResNet(nn.Module):
 class Discriminator(nn.Module):
     def __init__(self, input_shape, patch):
         super(Discriminator, self).__init__()
-
+        assert patch in [4, 8, 16]
+        print('Use ' + str(patch) + ' patch discriminator')
         channels, height, width = input_shape
 
         # Calculate output shape of image discriminator (PatchGAN)
         # this means no shit
-        self.output_shape = (1, height // int(patch), width // int(patch))
 
         def discriminator_block(in_filters, out_filters, normalize=True):
             """Returns downsampling layers of each discriminator block"""
@@ -110,17 +110,39 @@ class Discriminator(nn.Module):
             layers.append(nn.LeakyReLU(0.2, inplace=True))
             return layers
 
-        self.model = nn.Sequential(
-            *discriminator_block(channels, 64, normalize=False),
-            *discriminator_block(64, 128),
-            *discriminator_block(128, 256),
-            *discriminator_block(256, 512),
-            nn.ZeroPad2d((1, 0, 1, 0)),
-            nn.Conv2d(512, 1, 4, padding=1)
-        )
+        if 0:
+            layers = [*discriminator_block(channels, 64, normalize=False),
+                      *discriminator_block(64, 128)]
+
+            if (patch == 4) or (patch == 8):
+                layers = layers + [*discriminator_block(128, 128)]
+
+            layers = layers + [*discriminator_block(128, 256)]
+
+            if patch == 4:
+                layers = layers + [*discriminator_block(256, 256)]
+
+            layers = layers + [*discriminator_block(256, 512),
+                    nn.ZeroPad2d((1, 0, 1, 0)),
+                    nn.Conv2d(512, 1, 4, padding=1)]
+
+            self.model = nn.Sequential(*layers)
+        else:
+            self.model = nn.Sequential(
+                *discriminator_block(channels, 64, normalize=False),
+                *discriminator_block(64, 128),
+                *discriminator_block(128, 256),
+                *discriminator_block(256, 512),
+                nn.ZeroPad2d((1, 0, 1, 0)),
+                nn.Conv2d(512, 1, 4, padding=1)
+            )
 
     def forward(self, img):
         out = self.model(img)
         return out,
 
+
+if __name__ == '__main__':
+    d = Discriminator((3, 256, 256), patch=16)
+    print(d(torch.rand((1, 3, 256, 256)))[0].shape)
 

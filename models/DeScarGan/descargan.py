@@ -18,6 +18,8 @@ import torch.nn.functional as F
 import numpy as np
 
 sig = nn.Sigmoid()
+ACTIVATION = nn.ReLU
+c_dim = 2
 #device = 'cuda'
 
 
@@ -27,13 +29,24 @@ class Flatten(torch.nn.Module):
 
 
 class Identity(nn.Module):
-
     def forward(self, x):
         return x
 
 
-ACTIVATION = nn.ReLU
-c_dim = 2
+def get_activation(fn):
+    if fn == 'none':
+        return Identity
+    elif fn == 'relu':
+        return nn.ReLU
+    elif fn == 'lrelu':
+        return nn.LeakyReLU(0.01)  # pix2pix use 0.2
+    elif fn == 'sigmoid':
+        return nn.Sigmoid
+    elif fn == 'tanh':
+        return nn.Tanh
+    else:
+        raise Exception('Unsupported activation function: ' + str(fn))
+
 
 
 def crop_and_concat(upsampled, bypass, crop=False):
@@ -84,11 +97,8 @@ def conv2d_block(in_channels, out_channels, kernel=3, stride=1, padding=1, activ
 
 
 class Generator(nn.Module):
-
-    def __init__(self, n_channels=1, nf=32, batch_norm=True, activation=ACTIVATION):
+    def __init__(self, n_channels=1, nf=32, batch_norm=True, activation=ACTIVATION, final='tanh'):
         super(Generator, self).__init__()
-
-        act = activation
 
         conv_block = conv2d_bn_block if batch_norm else conv2d_block
 
@@ -131,15 +141,22 @@ class Generator(nn.Module):
 
         self.up1 = deconv2d_bn_block(2 * nf, nf, activation=act)
 
+        final_layer = get_activation(final)
+        print(final_layer)
+
         self.conv7_k = nn.Sequential(
             conv_block(nf, nf, activation=act),
-            conv_block(nf, n_channels, activation=nn.Tanh),
+            conv_block(nf, n_channels, activation=final_layer),
         )
 
         self.conv7_g = nn.Sequential(
             conv_block(nf, nf, activation=act),
-            conv_block(nf, n_channels, activation=nn.Tanh),
+            conv_block(nf, n_channels, activation=final_layer),
         )
+
+        #if NoTanh:
+        #    self.conv7_k[-1] = self.conv7_k[-1][:-1]
+        #    self.conv7_g[-1] = self.conv7_g[-1][:-1]
 
     def forward(self, xori, a, res=False):
         x = 1 * xori
@@ -169,10 +186,6 @@ class Generator(nn.Module):
         x70 = self.conv7_k(xu1)
         #else:
         x71 = self.conv7_g(xu1)
-
-        # residual
-        if res:
-            x7 = x7 + xori
 
         return x70, x71
 
@@ -236,11 +249,11 @@ class Discriminator(nn.Module):
 
 
 if __name__ == '__main__':
-    g = Generator(n_channels=3, batch_norm=False).cuda()
+    g = Generator(n_channels=3, batch_norm=False, final='tanh').cuda()
     #from torchsummary import summary
-    from utils.data_utils import print_num_of_parameters
-    print_num_of_parameters(g)
+    #from utils.data_utils import print_num_of_parameters
+    #print_num_of_parameters(g)
 
-    d = Discriminator()
+    #d = Discriminator()
     #summary(g, [(3, 256, 256), (2)])
-    o = g(torch.rand(2, 3, 256, 256).cuda(), torch.ones(2, 2).cuda())
+    #o = g(torch.rand(2, 3, 256, 256).cuda(), torch.ones(2, 2).cuda())

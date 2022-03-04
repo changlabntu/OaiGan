@@ -36,6 +36,17 @@ class GAN(BaseModel):
             self.imgX0 = self.net_g(self.oriX)[0]
             self.imgX1 = self.net_g(self.oriX)[0]
 
+        if self.hparams.res:
+            #self.imgX0 = (self.imgX0) + self.oriX
+            #self.imgX1 = (self.imgX1) + self.oriX
+
+            #print(self.imgX0.max())
+            #print(self.imgX0.min())
+
+            self.imgX0 = torch.mul(self.imgX0, self.oriX)
+            self.imgX1 = torch.mul(self.imgX1, self.oriX)
+
+
     def backward_g(self, inputs):
         # ADV(X0)+
         loss_g = 0

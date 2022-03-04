@@ -129,8 +129,10 @@ class PairedData(data.Dataset):
 
     def load_img(self, path):
         x = Image.open(path) #(DESS: 294>286) (PAIN: 224>286)
-        x = np.array(x).astype(np.float32)
-        x = x / x.max()
+        x = np.array(x).astype(np.float32)#[:, :, :3]
+        #x[x<=50] = 0
+        if x.max() > 0:  # scale to 0-1
+            x = x / x.max()
         if len(x.shape) == 2: # if grayscale
             x = np.concatenate([np.expand_dims(x, 2)]*3, 2)
         return x
@@ -144,19 +146,35 @@ class PairedData(data.Dataset):
 
         outputs = ()
         for k in list(augmented.keys()):
-            #outputs = outputs + (augmented[k], )
             outputs = outputs + (transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(augmented[k]), )
+            #outputs = outputs + (augmented[k], )
 
         return outputs
 
 
-def save_segmentation(dataset, destination, filldigit=4):
+def save_segmentation(dataset, names, destination, use_t2d):
+    """
+    turn images into segmentation and save it
+    """
+    os.makedirs(destination, exist_ok=True)
     seg = torch.load('submodels/model_seg_ZIB_res18_256.pth').cuda()
+    t2d = torch.load('submodels/tse_dess_unet32.pth')
     seg.eval()
+    t2d.eval()
     for i in range(len(dataset)):
-        out = seg(dataset.__getitem__(i)[0].unsqueeze(0).cuda())
+        x = dataset.__getitem__(i)[0].unsqueeze(0).cuda()
+        if use_t2d:
+            x = t2d(x)[0]
+        out = seg(x)
         out = torch.argmax(out, 1).squeeze().detach().cpu().numpy().astype(np.uint8)
-        tiff.imsave(destination + str(i).zfill(filldigit) + '.tif', out)
+        tiff.imsave(destination + names[i], out)
+
+
+def save_masked(dataset, names, destination, use_t2d):
+    for i in range(len(dataset)):
+        x, mask = dataset.__getitem__(i)[0].unsqueeze(0).cuda()
+        #mask =
+        tiff.imsave(destination + names[i], out)
 
 
 if __name__ == '__main__':
@@ -166,11 +184,11 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='pix2pix-pytorch-implementation')
     # Data
-    parser.add_argument('--dataset', type=str, default='kl3')
+    parser.add_argument('--dataset', type=str, default='womac3')
     parser.add_argument('--bysubject', action='store_true', dest='bysubject', default=False)
     #parser.add_argument('--direction', type=str, default='xyweak_xyori_xyorisb%zyweak_zyori', help='a2b or b2a')
     #parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
-    parser.add_argument('--direction', type=str, default='goodKL3reg', help='a2b or b2a')
+    parser.add_argument('--direction', type=str, default='aregis1', help='a2b or b2a')
     parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
     parser.add_argument('--resize', type=int, default=0)
     parser.add_argument('--cropsize', type=int, default=0)
@@ -179,9 +197,31 @@ if __name__ == '__main__':
     opt = parser.parse_args()
     opt.bysubject = False
 
-    #  Dataset
-    train_set = MultiData(root=os.environ.get('DATASET') + opt.dataset + '/train/', path=opt.direction,
-                        opt=opt, mode='train')
+    root = os.environ.get('DATASET') + opt.dataset + '/train/'
+    source = 'b'
+    destination = 'bseg/'
+    opt.direction = source
+    dataset = MultiData(root=root, path=opt.direction, opt=opt, mode='test')
 
-    x = train_set.__getitem__(100)
-    save_segmentation(dataset=train_set, destination='/media/ExtHDD01/Dataset/paired_images/kl3/train/goodseg/')
+    #  Dataset
+    if 0:
+        #x = train_set.__getitem__(100)
+        names = [x.split('/')[-1] for x in sorted(glob.glob(root + source + '/*'))]
+        save_segmentation(dataset=dataset,
+                          names=names,
+                          destination=root + destination, use_t2d=True)
+
+    if 0:
+        root = os.environ.get('DATASET') + opt.dataset + '/test/'
+        source = 'aregis1/'
+        mask = 'aseg/'
+        destination = 'amask/'
+        images = [x.split('/')[-1] for x in sorted(glob.glob(root + source + '*'))]
+
+        os.makedirs(root + destination, exist_ok=True)
+        for im in images:
+            x = np.array(Image.open(root + source + im))
+            m = np.array(Image.open(root + mask + im))
+            m = (m == 1) + (m == 3)
+            masked = np.multiply(x, m)
+            tiff.imsave(root + destination + im, masked)

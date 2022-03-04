@@ -7,13 +7,13 @@ from models.AttGAN.switchable_norm import SwitchNorm1d, SwitchNorm2d
 def add_normalization_1d(layers, fn, n_out):
     if fn == 'none':
         pass
-    elif fn == 'batchnorm':
+    elif fn == 'batch':
         layers.append(nn.BatchNorm1d(n_out))
-    elif fn == 'instancenorm':
+    elif fn == 'instance':
         layers.append(Unsqueeze(-1))
         layers.append(nn.InstanceNorm1d(n_out, affine=True))
         layers.append(Squeeze(-1))
-    elif fn == 'switchnorm':
+    elif fn == 'switch':
         layers.append(SwitchNorm1d(n_out))
     else:
         raise Exception('Unsupported normalization: ' + str(fn))
@@ -23,11 +23,11 @@ def add_normalization_1d(layers, fn, n_out):
 def add_normalization_2d(layers, fn, n_out):
     if fn == 'none':
         pass
-    elif fn == 'batchnorm':
+    elif fn == 'batch':
         layers.append(nn.BatchNorm2d(n_out))
-    elif fn == 'instancenorm':
+    elif fn == 'instance':
         layers.append(nn.InstanceNorm2d(n_out, affine=True))
-    elif fn == 'switchnorm':
+    elif fn == 'switch':
         layers.append(SwitchNorm2d(n_out))
     else:
         raise Exception('Unsupported normalization: ' + str(fn))

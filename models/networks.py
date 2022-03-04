@@ -528,3 +528,5 @@ if __name__ == '__main__':
     from utils.data_utils import print_num_of_parameters
     print_num_of_parameters(g)
     #summary(g, [(3, 256, 256)])
+    d = NLayerDiscriminator(input_nc=1, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d)
+    print(d(torch.rand(1, 1, 256, 256))[0].shape)

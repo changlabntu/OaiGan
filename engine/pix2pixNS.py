@@ -21,6 +21,10 @@ class GAN(BaseModel):
         except:
             self.imgX0 = self.net_g(self.oriX)[0]
 
+        if self.hparams.res:
+            #self.imgX0 = self.imgX0 + self.oriX
+            self.imgX0 = torch.mul(self.imgX0, self.oriX)
+
     def backward_g(self, inputs):
         # ADV(X0, Y)+
         loss_g = 0
@@ -46,7 +50,9 @@ class GAN(BaseModel):
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset FlyZ -b 16 --prj WpOp/sb256 --direction xyweak_xyorisb --resize 256 --engine pix2pixNS
 
 
-# CUDA_VISIBLE_DEVICES=0 python train.py --dataset womac3 -b 16 --prj NS/NoL1 --direction aregis1_b --cropsize 256 --engine pix2pixNS --lamb 0
+# CUDA_VISIBLE_DEVICES=0 python train.py --dataset womac3 -b 16 --prj NS/GattNoL1 --direction aregis1_b --cropsize 256 --engine pix2pixNS --lamb 0 --netG attgan
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset womac3 -b 16 --prj seg/NS_Gatt --direction amask_bmask --cropsize 256 --engine pix2pixNS --netG attgan
 
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset kl3 -b 16 --prj NS/0 --direction badKL3afterreg_gooodKL3reg --cropsize 256 --engine pix2pixNS
 
+# CUDA_VISIBLE_DEVICES=0 python train.py --dataset kl3 -b 16 --prj seg/res6L10 --direction badseg_goodseg --resize 384 --cropsize 256 --engine pix2pixNS --netG resnet_6blocks --lamb 0
