@@ -13,6 +13,8 @@ dataset/
 logs/
 logs2/
 outputs/results/
+outputs/temp/
+outputs/temp2/
 outputs/XXX/
 result/
 Untitled/
