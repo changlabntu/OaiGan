@@ -75,4 +75,4 @@ class GAN(BaseModel):
 
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset womac3 -b 16 --prj descar2/GDdescarNoL1 --direction aregis1_b --cropsize 256 --engine descar2 --netG descar --netD descar
 
-# CUDA_VISIBLE_DEVICES=1 python train.py --dataset womac3 -b 16 --prj N01/DescarRes --direction aregis1_b --cropsize 256 --engine descar2 --netG descar --netD patch_7 --res --n01 --final sigmoid --cmb mul
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset womac3 -b 16 --prj N01/DescarMul --direction aregis1_b --cropsize 256 --engine descar2 --netG descar --netD patch_16 --n01 --final sigmoid --cmb mul

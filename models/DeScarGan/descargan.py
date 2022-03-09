@@ -96,7 +96,7 @@ def conv2d_block(in_channels, out_channels, kernel=3, stride=1, padding=1, activ
 
 
 class Generator(nn.Module):
-    def __init__(self, n_channels=1, nf=32, batch_norm=True, activation=ACTIVATION, final='tanh', c_dim=2):
+    def __init__(self, n_channels=1, nf=32, batch_norm=True, activation=ACTIVATION, final='tanh'):
         super(Generator, self).__init__()
 
         conv_block = conv2d_bn_block if batch_norm else conv2d_block
@@ -157,9 +157,10 @@ class Generator(nn.Module):
         #    self.conv7_k[-1] = self.conv7_k[-1][:-1]
         #    self.conv7_g[-1] = self.conv7_g[-1][:-1]
 
-    def forward(self, xori, a, res=False):
+    def forward(self, xori, a):
         x = 1 * xori
         # c: (B, C)
+        self.c_dim = 0
         if self.c_dim > 0:
             c = a
             c1 = c.view(c.size(0), c.size(1), 1, 1)

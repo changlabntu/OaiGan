@@ -79,56 +79,9 @@ class BaseModel(pl.LightningModule):
         hparams.pop('not_tracking_hparams', None)
         self.hparams.update(hparams)
         self.save_hyperparameters(self.hparams)
-        self.best_auc = 0
 
-        # GENERATOR
-        if self.hparams.netG == 'attgan':
-            from models.AttGAN.attgan import Generator
-            print('use attgan generator')
-            self.net_g = Generator(enc_dim=self.hparams.ngf, dec_dim=self.hparams.ngf,
-                                   n_attrs=self.hparams.n_attrs, img_size=256,
-                                   enc_norm_fn=self.hparams.norm, dec_norm_fn=self.hparams.norm,
-                                   final=self.hparams.final)
-            self.net_g_inc = 1
-        elif self.hparams.netG == 'descar':
-            from models.DeScarGan.descargan import Generator
-            print('use descargan generator')
-            if self.hparams.norm == 'batch':
-                usebatch = True
-            elif self.hparams.norm == 'none':
-                usebatch = False
-            self.net_g = Generator(n_channels=3, batch_norm=usebatch, final=self.hparams.final)
-            self.net_g_inc = 2
-        else:
-            self.net_g = define_G(input_nc=self.hparams.input_nc, output_nc=self.hparams.output_nc,
-                                  ngf=self.hparams.ngf, netG=self.hparams.netG,
-                                  norm=self.hparams.norm, use_dropout=self.hparams.mc, init_type='normal', init_gain=0.02, gpu_ids=[])
-            self.net_g_inc = 0
-
-        # DISCRIMINATOR
-        # Patchgan from cyclegan (pix2pix one is strange)
-        if (self.hparams.netD).startswith('patch'):
-            from models.cyclegan.models import Discriminator
-            self.net_d = Discriminator(input_shape=(6, 256, 256), patch=int((self.hparams.netD).split('_')[-1]))
-        elif self.hparams.netD == 'sagan':
-            from models.sagan.sagan import Discriminator
-            print('use sagan discriminator')
-            self.net_d = Discriminator(image_size=64)
-        elif self.hparams.netD == 'acgan':
-            from models.acgan import Discriminator
-            print('use acgan discriminator')
-            self.net_d = Discriminator(img_shape=(6, 256, 256), n_classes=2)
-        elif self.hparams.netD == 'attgan':
-            from models.AttGAN.attgan import Discriminators
-            print('use attgan discriminator')
-            self.net_d = Discriminators(img_size=256, cls=2)
-        elif self.hparams.netD == 'descar':
-            from models.DeScarGan.descargan import Discriminator
-            print('use descargan discriminator')
-            self.net_d = Discriminator()
-        # original pix2pix, the size of patchgan is strange, just use for pixel-D
-        else:
-            self.net_d = define_D(input_nc=self.hparams.output_nc * 2, ndf=64, netD=self.hparams.netD)
+        # set networks
+        self.set_networks()
 
         # Init. Network Parameters
         self.net_g = self.net_g.apply(_weights_init)
@@ -157,6 +110,57 @@ class BaseModel(pl.LightningModule):
 
         # Final
         self.hparams.update(vars(self.hparams))   # updated hparams to be logged in tensorboard
+
+    def set_networks(self):
+        # GENERATOR
+        if self.hparams.netG == 'attgan':
+            from models.AttGAN.attgan import Generator
+            print('use attgan generator')
+            self.net_g = Generator(enc_dim=self.hparams.ngf, dec_dim=self.hparams.ngf,
+                                   n_attrs=self.hparams.n_attrs, img_size=256,
+                                   enc_norm_fn=self.hparams.norm, dec_norm_fn=self.hparams.norm,
+                                   final=self.hparams.final)
+            self.net_g_inc = 1
+        elif self.hparams.netG == 'descar':
+            from models.DeScarGan.descargan import Generator
+            print('use descargan generator')
+            # descargan only has options for batchnorm or none
+            if self.hparams.norm == 'batch':
+                usebatch = True
+            elif self.hparams.norm == 'none':
+                usebatch = False
+            self.net_g = Generator(n_channels=self.hparams.input_nc, batch_norm=usebatch, final=self.hparams.final)
+            self.net_g_inc = 2
+        else:
+            self.net_g = define_G(input_nc=self.hparams.input_nc, output_nc=self.hparams.output_nc,
+                                  ngf=self.hparams.ngf, netG=self.hparams.netG,
+                                  norm=self.hparams.norm, use_dropout=self.hparams.mc, init_type='normal', init_gain=0.02, gpu_ids=[])
+            self.net_g_inc = 0
+
+        # DISCRIMINATOR
+        if (self.hparams.netD).startswith('patch'):  # Patchgan from cyclegan (the pix2pix one is strange)
+            from models.cyclegan.models import Discriminator
+            self.net_d = Discriminator(input_shape=(self.hparams.input_nc * 2, 256, 256), patch=int((self.hparams.netD).split('_')[-1]))
+        elif self.hparams.netD == 'sagan':
+            from models.sagan.sagan import Discriminator
+            print('use sagan discriminator')
+            self.net_d = Discriminator(image_size=64)
+        elif self.hparams.netD == 'acgan':
+            from models.acgan import Discriminator
+            print('use acgan discriminator')
+            self.net_d = Discriminator(img_shape=(self.hparams.input_nc * 2, 256, 256), n_classes=2)
+        elif self.hparams.netD == 'attgan':
+            from models.AttGAN.attgan import Discriminators
+            print('use attgan discriminator')
+            self.net_d = Discriminators(img_size=256, cls=2)
+        elif self.hparams.netD == 'descar':
+            from models.DeScarGan.descargan import Discriminator
+            print('use descargan discriminator')
+            self.net_d = Discriminator()
+        # original pix2pix, the size of patchgan is strange, just use for pixel-D
+        else:
+            self.net_d = define_D(input_nc=self.hparams.output_nc * 2, ndf=64, netD=self.hparams.netD)
+
 
     def configure_optimizers(self):
         netg_parameters = []

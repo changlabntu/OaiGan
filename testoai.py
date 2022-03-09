@@ -11,6 +11,7 @@ from utils.data_utils import norm_01
 from skimage import io
 import torchvision.transforms as transforms
 import torch.nn as nn
+from engine.base import combine
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -103,22 +104,38 @@ class Pix2PixModel:
 
         alpha = alpha / 100
 
-        try: ## descargan new
-            output0, output1 = self.net_g(in_img, alpha * torch.ones(1, 2).cuda())
-            output = output0# - output0
-
-        except:
-            try: ## descargan
-                output = self.net_g(in_img, alpha * torch.ones(1, 2).cuda())[0]
+        ###
+        self.net_g.train()
+        for i in range(1):
+            try: ## descargan new
+                output, output1 = self.net_g(in_img, alpha * torch.ones(1, 2).cuda())
             except:
-                try: ## attgan
-                    self.net_g.f_size = args.cropsize // 32
-                    output = self.net_g(in_img, alpha * torch.ones(1, 1).cuda())[0]
+                try: ## descargan
+                    output = self.net_g(in_img, alpha * torch.ones(1, 2).cuda())[0]
                 except:
-                    output = self.net_g(in_img)[0]
+                    try: ## attgan
+                        self.net_g.f_size = args.cropsize // 32
+                        output = self.net_g(in_img, alpha * torch.ones(1, 1).cuda())[0]
+                    except:
+                        output = self.net_g(in_img)[0]
+        if 0:
+            self.net_g.eval()
+            try: ## descargan new
+                output, output1 = self.net_g(in_img, alpha * torch.ones(1, 2).cuda())
+            except:
+                try: ## descargan
+                    output = self.net_g(in_img, alpha * torch.ones(1, 2).cuda())[0]
+                except:
+                    try: ## attgan
+                        self.net_g.f_size = args.cropsize // 32
+                        output = self.net_g(in_img, alpha * torch.ones(1, 1).cuda())[0]
+                    except:
+                        output = self.net_g(in_img)[0]
 
-        from engine.base import combine
-        output = combine(output, in_img, args.cmb)
+        if args.cmb is not None:
+            output = combine(1 - output1 + output, in_img, args.cmb)
+            #output1 = combine(output1, in_img, args.cmb)
+            output = output #+ in_img
 
         in_img = in_img.detach().cpu()[0, ::]
         out_img = out_img.detach().cpu()[0, ::]
@@ -152,7 +169,18 @@ class Pix2PixModel:
         magic = magic[0][0, 0, ::].detach().cpu()
         return magic
 
-    def get_all_seg(self, input):
+    def get_all_seg(self, input_ori):
+        # normalize
+        if self.args.n01:
+            input =[]
+            for i in range(len(input_ori)):
+                temp = []
+                for j in range(len(input_ori[0])):
+                    temp.append(transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(input_ori[i][j]))
+                input.append(temp)
+        else:
+            input = input_ori
+
         if self.args.t2d:
             input = list(map(lambda k: list(map(lambda v: self.get_t2d(v), k)), input))  # (3, 256, 256) (-1, 1)
         #list_norm = list(map(lambda k: list(map(lambda v: norm_01(v), k)), input))  # (3, 256, 256) (0, 1)
@@ -166,10 +194,11 @@ def to_print(to_show, save_name):
     to_show = [torch.cat(x, len(x[0].shape) - 1) for x in to_show]
     to_show = [x - x.min() for x in to_show]
     to_show = [x / x.max() for x in to_show]
+    print(to_show[0].shape)\
 
     for i in range(len(to_show)):
         if len(to_show[i].shape) == 2:
-            to_show[i] = torch.cat([to_show[i].unsqueeze(0)] * 3, 0)
+            to_show[i] = torch.cat([to_show[i].unsqueeze(0)] * 3, 1)
 
     to_print = np.concatenate([x / x.max() for x in to_show], 1).astype(np.float16)
     imagesc(to_print, show=False, save=save_name)
@@ -205,7 +234,7 @@ parser.add_argument('--netg', type=str)
 parser.add_argument('--resize', type=int)
 parser.add_argument('--cropsize', type=int)
 parser.add_argument('--t2d', action='store_true', dest='t2d', default=False)
-parser.add_argument('--cmb', type=str, default='none', help='way to combine output to the input')
+parser.add_argument('--cmb', type=str, default=None, help='way to combine output to the input')
 parser.add_argument('--n01', action='store_true', dest='n01')
 parser.add_argument('--flip', action='store_true', dest='flip')
 parser.add_argument('--eval', action='store_true', dest='eval')
@@ -234,6 +263,7 @@ if len(args.nalpha) == 1:
 
 test_unit = Pix2PixModel(args=args)
 print(len(test_unit.test_set))
+
 for epoch in range(*args.nepochs):
     #try:
     test_unit.get_model(epoch, eval=args.eval)
@@ -264,8 +294,8 @@ for epoch in range(*args.nepochs):
 
             tag = True
             x0 = seperate_by_seg(x=ooo, seg_used=seg_xy[0], masked=[0, 2, 4], if_absolute=tag, threshold=0, rgb=tag)
-            diffseg0 = seperate_by_seg(x=diff_xy, seg_used=seg_xy[0], masked=[0, 2, 4], if_absolute=tag, threshold=0, rgb=tag)
-            diffseg1 = seperate_by_seg(x=diff_xy, seg_used=seg_xy[0], masked=[1, 3], if_absolute=tag, threshold=0, rgb=tag)
+            diffseg0 = seperate_by_seg(x=diff_xy, seg_used=seg_xy[2], masked=[0, 2, 4], if_absolute=tag, threshold=0, rgb=tag)
+            diffseg1 = seperate_by_seg(x=diff_xy, seg_used=seg_xy[2], masked=[1, 3], if_absolute=tag, threshold=0, rgb=tag)
 
             seg0_all.append(np.expand_dims(np.concatenate([x[:1, ::] for x in diffseg0], 0), 3))
             seg1_all.append(np.expand_dims(np.concatenate([x[:1, ::] for x in diffseg1], 0), 3))
@@ -308,4 +338,6 @@ for epoch in range(*args.nepochs):
 # USAGE
 # CUDA_VISIBLE_DEVICES=0 python test.py --jsn default --dataset pain --nalpha 0 100 2  --prj VryAtt
 # CUDA_VISIBLE_DEVICES=0 python test.py --jsn default --dataset TSE_DESS --nalpha 0 100 1  --prj VryCycleUP --net netGXY
+# python testoai.py --jsn womac3 --direction a_b --prj N01/DescarMul/ --cropsize 384 --n01 --cmb mul
+
 

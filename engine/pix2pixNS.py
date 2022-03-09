@@ -1,4 +1,4 @@
-from engine.base import BaseModel
+from engine.base import BaseModel, combine
 import torch
 
 
@@ -21,9 +21,8 @@ class GAN(BaseModel):
         except:
             self.imgX0 = self.net_g(self.oriX)[0]
 
-        if self.hparams.res:
-            #self.imgX0 = self.imgX0 + self.oriX
-            self.imgX0 = torch.mul((self.imgX0 + 1) / 2, self.oriX)
+        if self.hparams.cmb is not None:
+            self.imgX0 = combine(self.imgX0, self.oriX, method=self.hparams.cmb)
 
     def backward_g(self, inputs):
         # ADV(X0, Y)+
