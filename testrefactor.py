@@ -55,7 +55,7 @@ class Pix2PixModel:
         self.args = args
         self.net_g = None
         self.dir_checkpoints = os.environ.get('LOGS')
-        from dataloader.data_multi import MultiData as Dataset
+        from dataloader.data_multi_old import MultiData as Dataset
 
         self.test_set = Dataset(root=os.environ.get('DATASET') + args.testset,
                                 path=args.direction,
@@ -154,7 +154,7 @@ def seperate_by_seg(x0, seg, masked, absolute, threshold, rgb):
         for i in range(x.shape[0]):
             # normalize by subject
             xi = x[i, 0, ::]
-            xi[0, 0] = 0.2
+            #xi[0, 0] = 0.2
             xi = xi / xi.max()
             #xi = xi - xi.min()
             #xi = xi / xi.max()
@@ -212,6 +212,7 @@ if args.env is not None:
     load_dotenv('.' + args.env)
 else:
     load_dotenv('.env')
+    load_dotenv('.env')
 
 if len(args.nepochs) == 1:
     args.nepochs = [args.nepochs[0], args.nepochs[0]+1, 1]
@@ -223,8 +224,8 @@ print(len(test_unit.test_set))
 
 for epoch in range(*args.nepochs):
     test_unit.get_model(epoch, eval=args.eval)
-    for ii in range(len(test_unit.test_set)):
-        args.irange = [ii]
+    for ii in range(1):#range(len(test_unit.test_set)):
+        #args.irange = [ii]
         seg0_all = []
         seg1_all = []
 
@@ -252,10 +253,10 @@ for epoch in range(*args.nepochs):
                        diffseg1
                        ]
 
-            #to_print(to_show, save_name=os.path.join("outputs/results", args.dataset, args.prj,
-            #                                         str(epoch) + '_' + str(alpha) + '_' + str(ii).zfill(4) + '.jpg'))
+            to_print(to_show, save_name=os.path.join("outputs/results", args.dataset, args.prj,
+                                                     str(epoch) + '_' + str(alpha) + '_' + str(ii).zfill(4) + '.jpg'))
 
-            to_print(to_show, save_name=os.path.join("outputs/temp2/",  str(ii).zfill(4) + '.jpg'))
+            #to_print(to_show, save_name=os.path.join("outputs/temp2/",  str(ii).zfill(4) + '.jpg'))
 
 
 

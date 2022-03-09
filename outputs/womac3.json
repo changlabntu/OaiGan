@@ -16,8 +16,8 @@
     "n01": true,
     "cmb": "mul",
     "nepochs": [
-        20,
-        30,
+        0,
+        200,
         10
     ],
     "nalpha": [

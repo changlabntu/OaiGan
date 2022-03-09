@@ -55,7 +55,7 @@ class Pix2PixModel:
         self.args = args
         self.net_g = None
         self.dir_checkpoints = os.environ.get('LOGS')
-        from dataloader.data_multi import MultiData as Dataset
+        from dataloader.data_multi_old import MultiData as Dataset
 
         self.test_set = Dataset(root=os.environ.get('DATASET') + args.testset,
                                 path=args.direction,
@@ -233,6 +233,7 @@ parser.add_argument('--direction', type=str, help='a_b')
 parser.add_argument('--netg', type=str)
 parser.add_argument('--resize', type=int)
 parser.add_argument('--cropsize', type=int)
+parser.add_argument('--bysubject', action='store_true', dest='bysubject', default=False)
 parser.add_argument('--t2d', action='store_true', dest='t2d', default=False)
 parser.add_argument('--cmb', type=str, default=None, help='way to combine output to the input')
 parser.add_argument('--n01', action='store_true', dest='n01')

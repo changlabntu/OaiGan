@@ -75,57 +75,34 @@ def get_transforms(crop_size, resize, additional_targets, need=('train', 'test')
 
 
 class MultiData(data.Dataset):
-    """
-    Multiple unpaired data ccombined
-    """
-    def __init__(self, root, path, opt, mode, transforms=None, filenames=False):
+    def __init__(self, root, path, opt, mode, transforms=None):
         super(MultiData, self).__init__()
         self.opt = opt
         self.mode = mode
-        self.filenames = filenames
         paired_path = path.split('%')
-        self.subset = []
+        self.dataset = []
         for p in range(len(paired_path)):
-            self.subset.append(PairedData(root=root, path=paired_path[p], opt=opt, mode=mode, filenames=filenames, bysubject=self.opt.bysubject))
+            self.dataset.append(PairedData(root=root, path=paired_path[p], opt=opt, mode=mode))
 
     def __len__(self):
-        return min([len(x) for x in self.subset])
+        return min([len(x) for x in self.dataset])
 
     def __getitem__(self, index):
-        outputs_all = ()
-        filenames_all = ()
-        if self.filenames:
-            for i in range(len(self.subset)):
-                outputs, filenames = self.subset[i].__getitem__(index)
-                outputs_all = outputs_all + outputs
-                filenames_all = filenames_all + filenames
-            return outputs_all, filenames_all
-        else:
-            for i in range(len(self.subset)):
-                outputs = self.subset[i].__getitem__(index)
-                outputs_all = outputs_all + outputs
-            return outputs_all
+        outputs = ()
+        for i in range(len(self.dataset)):
+            outputs = outputs + self.dataset[i].__getitem__(index)
+        return outputs
 
 
 class PairedData(data.Dataset):
-    """
-    Paired images with the same file name from different folders
-    """
-    def __init__(self, root, path, opt, mode, transforms=None, filenames=False, bysubject=False):
+    def __init__(self, root, path, opt, mode, transforms=None):
         super(PairedData, self).__init__()
         self.opt = opt
         self.mode = mode
-        self.filenames = filenames
-        self.bysubject = bysubject
 
         self.all_path = list(os.path.join(root, x) for x in path.split('_'))
 
-        # get name of images from the first folder
         self.images = sorted([x.split('/')[-1] for x in glob.glob(self.all_path[0] + '/*')])
-        subjects = sorted(list(set([x.replace('_' + x.split('_')[-1], '') for x in self.images])))
-        self.subjects = dict()
-        for s in subjects:
-            self.subjects[s] = sorted([x for x in self.images if x.replace('_' + x.split('_')[-1], '') == s])
 
         if self.opt.resize == 0:
             self.resize = np.array(Image.open(join(self.all_path[0], self.images[0]))).shape[1]
@@ -139,7 +116,7 @@ class PairedData(data.Dataset):
 
         if transforms is None:
             additional_targets = dict()
-            for i in range(1, 100):#len(self.all_path)):
+            for i in range(1, len(self.all_path)):
                 additional_targets[str(i)] = 'image'
             self.transforms = get_transforms(crop_size=self.cropsize,
                                              resize=self.resize,
@@ -148,10 +125,7 @@ class PairedData(data.Dataset):
             self.transforms = transforms
 
     def __len__(self):
-        if not self.bysubject:
-            return len(self.images)
-        else:
-            return len(self.subjects.keys())
+        return len(self.images)
 
     def load_img(self, path):
         x = Image.open(path)  #(DESS: 294>286) (PAIN: 224>286)
@@ -164,54 +138,19 @@ class PairedData(data.Dataset):
         return x
 
     def __getitem__(self, index):
-        #filenames = ()
         inputs = dict()
-        if not self.bysubject:
-            for i in range(len(self.all_path)):
-                name = join(self.all_path[i], self.images[index])
-                #filenames = filenames + (name,)
-                inputs[str(i)] = self.load_img(name)
-            inputs['image'] = inputs.pop('0')
-        else:
-            subject = sorted(self.subjects.keys())[index]
-            for i in range(len(self.all_path)):
-                a_input = dict()
-                #a_filename = []
+        inputs['image'] = self.load_img(join(self.all_path[0], self.images[index]))
+        for i in range(1, len(self.all_path)):
+            inputs[str(i)] = self.load_img(join(self.all_path[i], self.images[index]))  #.convert('RGB') (DESS: 294>286) (PAIN: 224>286)
+        augmented = self.transforms(**inputs)
 
-                for j in range(len(self.subjects[subject])):
-                    a_slice = join(self.all_path[i], self.subjects[subject][j])
-                    a_input[str(j)] = self.load_img(a_slice)
-                    #a_filename.append(a_slice)
-                a_input['image'] = a_input.pop('0')
-                inputs[i] = a_input
-                #filenames = filenames + (a_filename, )
-
-        # Do augmentation
         outputs = ()
-        if not self.bysubject:
-            augmented = self.transforms(**inputs)
-            for k in list(augmented.keys()):
-                if self.opt.n01:
-                    outputs = outputs + (augmented[k],)
-                else:
-                    outputs = outputs + (transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(augmented[k]), )
-        else:
-            for i in range(len(self.all_path)):
-                a_output = []
-                augmented = self.transforms(**inputs[i])
-                for k in list(augmented.keys()):
-                    if self.opt.n01:
-                        a_output.append(augmented[k].unsqueeze(3))
-                    else:
-                        a_output.append(transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(augmented[k]).unsqueeze(3))
-                a_output = torch.cat(a_output, 3)
-                outputs = outputs + (a_output, )
-
-        # return only images or with filenames
-        if self.filenames:
-            return outputs, filenames
-        else:
-            return outputs
+        for k in list(augmented.keys()):
+            if self.opt.n01:
+                outputs = outputs + (augmented[k],)
+            else:
+                outputs = outputs + (transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(augmented[k]), )
+        return outputs
 
 
 def save_segmentation(dataset, names, destination, use_t2d):
@@ -243,7 +182,7 @@ if __name__ == '__main__':
     parser.add_argument('--bysubject', action='store_true', dest='bysubject', default=False)
     #parser.add_argument('--direction', type=str, default='xyweak_xyori_xyorisb%zyweak_zyori', help='a2b or b2a')
     #parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
-    parser.add_argument('--direction', type=str, default='a_b', help='a2b or b2a')
+    parser.add_argument('--direction', type=str, default='aregis1', help='a2b or b2a')
     parser.add_argument('--flip', action='store_true', dest='flip', default=False, help='image flip left right')
     parser.add_argument('--resize', type=int, default=0)
     parser.add_argument('--cropsize', type=int, default=0)
@@ -252,14 +191,14 @@ if __name__ == '__main__':
     parser.add_argument('--mode', type=str, default='dummy')
     parser.add_argument('--port', type=str, default='dummy')
     opt = parser.parse_args()
+    opt.bysubject = False
 
     root = os.environ.get('DATASET') + opt.dataset + '/train/'
-    source = 'a_b%a'
+    source = 'b'
     destination = 'bseg/'
     opt.direction = source
-    opt.bysubject = True
-    opt.cropsize = 256
-    dataset = MultiData(root=root, path=opt.direction, opt=opt, mode='train', filenames=True)
+    opt.gray = True
+    dataset = MultiData(root=root, path=opt.direction, opt=opt, mode='test')
     x = dataset.__getitem__(10)
 
     #  Dataset

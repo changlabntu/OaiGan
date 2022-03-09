@@ -199,10 +199,12 @@ class BaseModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         self.batch = batch
-        #if self.hparams.bysubject:  # if working on 3D input, not using yet
-        #    (B, S, C, H, W) = self.oriX.shape
-        #    self.oriX = self.oriX.view(B * S, C, H, W)
-        #    self.oriY = self.oriY.view(B * S, C, H, W)
+        if self.hparams.bysubject:  # if working on 3D input
+            if len(self.batch[0].shape) == 5:
+                (B, C, H, W, Z) = self.batch[0].shape
+                for i in range(len(self.batch)):
+                    self.batch[i] = self.batch[i].permute(0, 4, 1, 2, 3)
+                    self.batch[i] = self.batch[i].reshape(B * Z, C, H, W)
 
         if optimizer_idx == 0:
             imgs = self.generation()
