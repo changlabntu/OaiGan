@@ -161,7 +161,6 @@ class BaseModel(pl.LightningModule):
         else:
             self.net_d = define_D(input_nc=self.hparams.output_nc * 2, ndf=64, netD=self.hparams.netD)
 
-
     def configure_optimizers(self):
         netg_parameters = []
         for g in self.netg_names.keys():

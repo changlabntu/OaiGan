@@ -193,13 +193,13 @@ if __name__ == '__main__':
     opt = parser.parse_args()
     opt.bysubject = False
 
-    root = os.environ.get('DATASET') + opt.dataset + '/train/'
-    source = 'b'
+    root = os.environ.get('DATASET') + opt.dataset + '/test'
+    source = 'a_b'
     destination = 'bseg/'
     opt.direction = source
     opt.gray = True
     dataset = MultiData(root=root, path=opt.direction, opt=opt, mode='test')
-    x = dataset.__getitem__(10)
+    x = dataset.__getitem__(14)
 
     #  Dataset
     if 0:

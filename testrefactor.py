@@ -12,6 +12,7 @@ from skimage import io
 import torchvision.transforms as transforms
 import torch.nn as nn
 from engine.base import combine
+import tifffile as tiff
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -55,11 +56,11 @@ class Pix2PixModel:
         self.args = args
         self.net_g = None
         self.dir_checkpoints = os.environ.get('LOGS')
-        from dataloader.data_multi_old import MultiData as Dataset
+        from dataloader.data_multi import MultiData as Dataset
 
         self.test_set = Dataset(root=os.environ.get('DATASET') + args.testset,
                                 path=args.direction,
-                                opt=args, mode='test')
+                                opt=args, mode='test', filenames=True)
 
         #self.seg_model = torch.load(os.environ.get('model_seg')).cuda()
         #self.seg_cartilage = torch.load('submodels/oai_cartilage_384.pth')#model_seg_ZIB.pth')
@@ -91,7 +92,7 @@ class Pix2PixModel:
 
     def get_one_output(self, i, alpha=None):
         # inputs
-        x = self.test_set.__getitem__(i)
+        x, name = self.test_set.__getitem__(i)
         oriX = x[0].unsqueeze(0).to(self.device)
         oriY = x[1].unsqueeze(0).to(self.device)
 
@@ -121,7 +122,7 @@ class Pix2PixModel:
         out_img = out_img.detach().cpu()
         output = output.detach().cpu()
 
-        return in_img, out_img, output
+        return in_img, out_img, output, name
 
     def get_segmentation(self, x0):
         # normalize
@@ -190,6 +191,7 @@ parser.add_argument('--direction', type=str, help='a_b')
 parser.add_argument('--netg', type=str)
 parser.add_argument('--resize', type=int)
 parser.add_argument('--cropsize', type=int)
+parser.add_argument('--bysubject', action='store_true', dest='bysubject', default=False)
 parser.add_argument('--t2d', action='store_true', dest='t2d', default=False)
 parser.add_argument('--cmb', type=str, help='way to combine output to the input')
 parser.add_argument('--n01', action='store_true', dest='n01')
@@ -224,14 +226,14 @@ print(len(test_unit.test_set))
 
 for epoch in range(*args.nepochs):
     test_unit.get_model(epoch, eval=args.eval)
-    for ii in range(1):#range(len(test_unit.test_set)):
-        #args.irange = [ii]
+    for ii in range(len(test_unit.test_set))[:20]:
+        args.irange = [ii]
         seg0_all = []
         seg1_all = []
 
-        for alpha in np.linspace(*args.nalpha):
+        for alpha in np.linspace(*args.nalpha)[:]:
             outputs = list(map(lambda v: test_unit.get_one_output(v, alpha), args.irange))
-            [imgX, imgY, imgXY] = list(zip(*outputs))
+            [imgX, imgY, imgXY, names] = list(zip(*outputs))
 
             imgX = torch.cat(imgX, 0)
             imgY = torch.cat(imgY, 0)
@@ -243,20 +245,32 @@ for epoch in range(*args.nepochs):
 
             diff_XY = imgX - imgXY
 
-            tag = True
+            tag = False
             diffseg0 = seperate_by_seg(x0=diff_XY, seg=imgXseg, masked=[0, 2, 4], absolute=tag, threshold=0, rgb=tag)
             diffseg1 = seperate_by_seg(x0=diff_XY, seg=imgXseg, masked=[1, 3], absolute=tag, threshold=0, rgb=tag)
 
-            to_show = [#imgX,
-                       #imgXY,
+            to_show = [imgX,
+                       imgY,
                        diffseg0,
-                       diffseg1
+                       #diffseg1
                        ]
 
-            to_print(to_show, save_name=os.path.join("outputs/results", args.dataset, args.prj,
+            print(diffseg0.max())
+            print(diffseg0.min())
+            print(names)
+            to_print(to_show, save_name=os.path.join("outputs/results/", args.dataset, args.prj,
                                                      str(epoch) + '_' + str(alpha) + '_' + str(ii).zfill(4) + '.jpg'))
 
-            #to_print(to_show, save_name=os.path.join("outputs/temp2/",  str(ii).zfill(4) + '.jpg'))
+            #to_print(to_show, save_name=os.path.join("outputs/results/a/",  str(ii).zfill(4) + '.jpg'))
+            if 0:
+                destination = '/media/ExtHDD01/Dataset/paired_images/womac3/test/abml/'
+                os.makedirs(destination, exist_ok=True)
+                if tag:
+                    to_save = diffseg0[0, ::].permute(1, 2, 0).numpy().astype(np.float16)
+                else:
+                    to_save = diffseg0[0, 0, ::].numpy().astype(np.float32)
+                tiff.imsave(os.path.join(destination,  names[0][0].split('/')[-1]), to_save)
+
 
 
 
@@ -264,5 +278,6 @@ for epoch in range(*args.nepochs):
 # CUDA_VISIBLE_DEVICES=0 python test.py --jsn default --dataset pain --nalpha 0 100 2  --prj VryAtt
 # CUDA_VISIBLE_DEVICES=0 python test.py --jsn default --dataset TSE_DESS --nalpha 0 100 1  --prj VryCycleUP --net netGXY
 # python testoai.py --jsn womac3 --direction a_b --prj N01/DescarMul/ --cropsize 384 --n01 --cmb mul
+# python testrefactor.py --jsn womac3 --direction b_a --prj N01/DescarMul/ --cropsize 384 --n01 --cmb mul --nepoch 20
 
 

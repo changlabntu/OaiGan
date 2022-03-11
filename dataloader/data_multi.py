@@ -140,7 +140,7 @@ class PairedData(data.Dataset):
         if transforms is None:
             additional_targets = dict()
             for i in range(1, 100):#len(self.all_path)):
-                additional_targets[str(i)] = 'image'
+                additional_targets[str(i).zfill(4)] = 'image'
             self.transforms = get_transforms(crop_size=self.cropsize,
                                              resize=self.resize,
                                              additional_targets=additional_targets)[mode]
@@ -164,33 +164,35 @@ class PairedData(data.Dataset):
         return x
 
     def __getitem__(self, index):
-        #filenames = ()
+        filenames = ()
         inputs = dict()
         if not self.bysubject:
             for i in range(len(self.all_path)):
                 name = join(self.all_path[i], self.images[index])
-                #filenames = filenames + (name,)
-                inputs[str(i)] = self.load_img(name)
-            inputs['image'] = inputs.pop('0')
+                filenames = filenames + (name,)
+                inputs[str(i).zfill(4)] = self.load_img(name)
+            inputs['image'] = inputs.pop('0000')
         else:
             subject = sorted(self.subjects.keys())[index]
             for i in range(len(self.all_path)):
                 a_input = dict()
-                #a_filename = []
+                a_filename = []
 
-                for j in range(len(self.subjects[subject])):
-                    a_slice = join(self.all_path[i], self.subjects[subject][j])
-                    a_input[str(j)] = self.load_img(a_slice)
-                    #a_filename.append(a_slice)
-                a_input['image'] = a_input.pop('0')
+                selected = sorted(self.subjects[subject])
+                for j in range(len(selected)):
+                    a_slice = join(self.all_path[i], selected[j])
+                    a_input[str(j).zfill(4)] = self.load_img(a_slice)
+                    a_filename.append(a_slice)
+                a_input['image'] = a_input.pop('0000')  # the first image in albumentation need to be name "image"
                 inputs[i] = a_input
-                #filenames = filenames + (a_filename, )
+                filenames = filenames + (a_filename, )
 
         # Do augmentation
         outputs = ()
         if not self.bysubject:
             augmented = self.transforms(**inputs)
-            for k in list(augmented.keys()):
+            augmented['0000'] = augmented.pop('image')  # 'change image back to 0'
+            for k in sorted(list(augmented.keys())):
                 if self.opt.n01:
                     outputs = outputs + (augmented[k],)
                 else:
@@ -199,7 +201,8 @@ class PairedData(data.Dataset):
             for i in range(len(self.all_path)):
                 a_output = []
                 augmented = self.transforms(**inputs[i])
-                for k in list(augmented.keys()):
+                augmented['0000'] = augmented.pop('image')  # 'change image back to 0'
+                for k in sorted(list(augmented.keys())):
                     if self.opt.n01:
                         a_output.append(augmented[k].unsqueeze(3))
                     else:
@@ -253,14 +256,17 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=str, default='dummy')
     opt = parser.parse_args()
 
-    root = os.environ.get('DATASET') + opt.dataset + '/train/'
-    source = 'a_b%a'
+    root = os.environ.get('DATASET') + opt.dataset + '/test/'
+    source = 'a_b'
     destination = 'bseg/'
     opt.direction = source
-    opt.bysubject = True
-    opt.cropsize = 256
+    #opt.bysubject = True
+    opt.cropsize = 384
     dataset = MultiData(root=root, path=opt.direction, opt=opt, mode='train', filenames=True)
-    x = dataset.__getitem__(10)
+    x = dataset.__getitem__(14)
+    opt.bysubject = True
+    dataset = MultiData(root=root, path=opt.direction, opt=opt, mode='train', filenames=True)
+    x3d = dataset.__getitem__(0)
 
     #  Dataset
     if 0:
