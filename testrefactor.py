@@ -13,6 +13,7 @@ import torchvision.transforms as transforms
 import torch.nn as nn
 from engine.base import combine
 import tifffile as tiff
+from dataloader.data_multi import MultiData as Dataset
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -56,8 +57,6 @@ class Pix2PixModel:
         self.args = args
         self.net_g = None
         self.dir_checkpoints = os.environ.get('LOGS')
-        from dataloader.data_multi import MultiData as Dataset
-
         self.test_set = Dataset(root=os.environ.get('DATASET') + args.testset,
                                 path=args.direction,
                                 opt=args, mode='test', filenames=True)
@@ -116,7 +115,8 @@ class Pix2PixModel:
                     output = self.net_g(in_img)[0]
 
         if args.cmb is not None:
-            output = combine(1 - output1 + output, in_img, args.cmb)
+            #output = combine(1 - output1 + output, in_img, args.cmb)
+            output = combine(output, in_img, args.cmb)
 
         in_img = in_img.detach().cpu()
         out_img = out_img.detach().cpu()
@@ -151,11 +151,10 @@ def seperate_by_seg(x0, seg, masked, absolute, threshold, rgb):
     if rgb:
         x = x.numpy()
         out = []
-
         for i in range(x.shape[0]):
             # normalize by subject
             xi = x[i, 0, ::]
-            #xi[0, 0] = 0.2
+            xi[0, 0] = 0.2
             xi = xi / xi.max()
             #xi = xi - xi.min()
             #xi = xi / xi.max()
@@ -165,6 +164,7 @@ def seperate_by_seg(x0, seg, masked, absolute, threshold, rgb):
     else:
         out = x
     return out
+
 
 def to_print(to_show, save_name):
     os.makedirs(os.path.join("outputs/results", args.dataset, args.prj), exist_ok=True)
@@ -197,6 +197,7 @@ parser.add_argument('--cmb', type=str, help='way to combine output to the input'
 parser.add_argument('--n01', action='store_true', dest='n01')
 parser.add_argument('--flip', action='store_true', dest='flip')
 parser.add_argument('--eval', action='store_true', dest='eval')
+parser.add_argument('--all', action='store_true', dest='all', default=False)
 parser.add_argument('--nepochs', default=(20, 30, 10), nargs='+', help='which checkpoints to be interfered with', type=int)
 parser.add_argument('--nalpha', default=(0, 100, 1), nargs='+', help='range of additional input parameter for generator', type=int)
 parser.add_argument('--mode', type=str, default='dummy')
@@ -226,8 +227,15 @@ print(len(test_unit.test_set))
 
 for epoch in range(*args.nepochs):
     test_unit.get_model(epoch, eval=args.eval)
-    for ii in range(len(test_unit.test_set))[:20]:
-        args.irange = [ii]
+
+    if args.all:
+        iirange = range(len(test_unit.test_set))[:]
+    else:
+        iirange = range(1)
+
+    for ii in iirange:
+        if args.all:
+            args.irange = [ii]
         seg0_all = []
         seg1_all = []
 
@@ -245,30 +253,30 @@ for epoch in range(*args.nepochs):
 
             diff_XY = imgX - imgXY
 
-            tag = False
+            tag = True
+            diff = seperate_by_seg(x0=diff_XY, seg=imgXseg, masked=[], absolute=tag, threshold=0, rgb=tag)
             diffseg0 = seperate_by_seg(x0=diff_XY, seg=imgXseg, masked=[0, 2, 4], absolute=tag, threshold=0, rgb=tag)
             diffseg1 = seperate_by_seg(x0=diff_XY, seg=imgXseg, masked=[1, 3], absolute=tag, threshold=0, rgb=tag)
 
             to_show = [imgX,
-                       imgY,
+                       imgXY,
+                       diff,
                        diffseg0,
-                       #diffseg1
+                       diffseg1
                        ]
 
-            print(diffseg0.max())
-            print(diffseg0.min())
-            print(names)
             to_print(to_show, save_name=os.path.join("outputs/results/", args.dataset, args.prj,
                                                      str(epoch) + '_' + str(alpha) + '_' + str(ii).zfill(4) + '.jpg'))
 
             #to_print(to_show, save_name=os.path.join("outputs/results/a/",  str(ii).zfill(4) + '.jpg'))
-            if 0:
-                destination = '/media/ExtHDD01/Dataset/paired_images/womac3/test/abml/'
+            if args.all:
+                result = diff#diffseg0
+                destination = '/media/ExtHDD01/Dataset/paired_images/womac3/test/bdiff/'
                 os.makedirs(destination, exist_ok=True)
                 if tag:
-                    to_save = diffseg0[0, ::].permute(1, 2, 0).numpy().astype(np.float16)
+                    to_save = result[0, ::].permute(1, 2, 0).numpy().astype(np.float16)
                 else:
-                    to_save = diffseg0[0, 0, ::].numpy().astype(np.float32)
+                    to_save = result[0, 0, ::].numpy().astype(np.float32)
                 tiff.imsave(os.path.join(destination,  names[0][0].split('/')[-1]), to_save)
 
 

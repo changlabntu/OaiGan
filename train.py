@@ -82,12 +82,13 @@ else:
 opt = prepare_log(opt)
 
 #  Define Dataset Class
-from dataloader.data_multi import MultiData as Dataset
+from dataloader.data_multi import PairedData3D as Dataset
 
 # Load Dataset and DataLoader
 train_set = Dataset(root=os.environ.get('DATASET') + opt.dataset + '/train/',
                     path=opt.direction,
                     opt=opt, mode='train')
+
 train_loader = DataLoader(dataset=train_set, num_workers=opt.threads, batch_size=opt.batch_size, shuffle=True)
 
 #  Pytorch Lightning Module

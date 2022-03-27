@@ -131,6 +131,16 @@ class BaseModel(pl.LightningModule):
                 usebatch = False
             self.net_g = Generator(n_channels=self.hparams.input_nc, batch_norm=usebatch, final=self.hparams.final)
             self.net_g_inc = 2
+        elif self.hparams.netG == 'descars':
+            from models.DeScarGan.descarganshallow import Generator
+            print('use descargan shallow generator')
+            # descargan only has options for batchnorm or none
+            if self.hparams.norm == 'batch':
+                usebatch = True
+            elif self.hparams.norm == 'none':
+                usebatch = False
+            self.net_g = Generator(n_channels=self.hparams.input_nc, batch_norm=usebatch, final=self.hparams.final)
+            self.net_g_inc = 2
         else:
             self.net_g = define_G(input_nc=self.hparams.input_nc, output_nc=self.hparams.output_nc,
                                   ngf=self.hparams.ngf, netG=self.hparams.netG,

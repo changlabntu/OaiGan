@@ -135,7 +135,7 @@ class Pix2PixModel:
         if args.cmb is not None:
             output = combine(1 - output1 + output, in_img, args.cmb)
             #output1 = combine(output1, in_img, args.cmb)
-            output = output #+ in_img
+            #output = output #+ in_img
 
         in_img = in_img.detach().cpu()[0, ::]
         out_img = out_img.detach().cpu()[0, ::]
@@ -293,7 +293,7 @@ for epoch in range(*args.nepochs):
 
             ooo = [x - x.min() for x in out_xy[0]]
 
-            tag = True
+            tag = False
             x0 = seperate_by_seg(x=ooo, seg_used=seg_xy[0], masked=[0, 2, 4], if_absolute=tag, threshold=0, rgb=tag)
             diffseg0 = seperate_by_seg(x=diff_xy, seg_used=seg_xy[2], masked=[0, 2, 4], if_absolute=tag, threshold=0, rgb=tag)
             diffseg1 = seperate_by_seg(x=diff_xy, seg_used=seg_xy[2], masked=[1, 3], if_absolute=tag, threshold=0, rgb=tag)
