@@ -21,38 +21,6 @@ def _weights_init(m):
         torch.nn.init.constant_(m.bias, 0)
 
 
-class MRPretrained(nn.Module):
-    def __init__(self):
-        super(MRPretrained, self).__init__()
-        self.features = getattr(torchvision.models, 'vgg11')(pretrained=True).features
-        self.fmap_c = 512
-        # fusion part
-        self.classifier_cat = nn.Conv2d(self.fmap_c * 23, 2, 1, 1, 0)
-        self.classifier_max = nn.Conv2d(self.fmap_c, 2, 1, 1, 0)
-        self.avg = nn.AdaptiveAvgPool2d((1, 1))
-
-    def forward(self, x):   # (23, 3, 256, 256)
-        x0 = x[0]
-        x1 = x[1]
-        features = None  # features we want to further analysis
-        B = 1
-        # features
-        x0 = self.features(x0)  # (23, 512, 7, 7)
-        x1 = self.features(x1)  # (23, 512, 7, 7)
-        # fusion
-        x0 = self.avg(x0)  # (B*23, 512, 1, 1)
-        x0 = x0.view(B, x0.shape[0] // B, x0.shape[1], x0.shape[2], x0.shape[3])  # (B, 23, 512, 1, 1)
-        x1 = self.avg(x1)  # (B*23, 512, 1, 1)
-        x1 = x1.view(B, x1.shape[0] // B, x1.shape[1], x1.shape[2], x1.shape[3])  # (B, 23, 512, 1, 1)
-
-        x0, _ = torch.max(x0, 1)
-        x1, _ = torch.max(x1, 1)
-        out = self.classifier_max(x0 - x1)  # (Classes)
-
-        out = out[:, :, 0, 0]
-        return out, features
-
-
 def combine(x, y, method):
     if method == 'res':
         return x + y
@@ -73,6 +41,8 @@ class BaseModel(pl.LightningModule):
         # save model names
         self.netg_names = {'net_g': 'netG'}
         self.netd_names = {'net_d': 'netD'}
+        self.loss_g_names = ['loss_g']
+        self.loss_d_names = ['loss_d']
 
         # hyperparameters
         hparams = {x: vars(hparams)[x] for x in vars(hparams).keys() if x not in hparams.not_tracking_hparams}
@@ -89,10 +59,6 @@ class BaseModel(pl.LightningModule):
             print('not init for netD of sagan')
         else:
             self.net_d = self.net_d.apply(_weights_init)
-
-        # In case you need a classifier
-        self.classifier = MRPretrained()
-        self.seg_model = torch.load(os.environ.get('model_seg')).cuda()
 
         # Optimizer and scheduler
         [self.optimizer_d, self.optimizer_g], [] = self.configure_optimizers()
@@ -121,19 +87,11 @@ class BaseModel(pl.LightningModule):
                                    enc_norm_fn=self.hparams.norm, dec_norm_fn=self.hparams.norm,
                                    final=self.hparams.final)
             self.net_g_inc = 1
-        elif self.hparams.netG == 'descar':
-            from models.DeScarGan.descargan import Generator
-            print('use descargan generator')
-            # descargan only has options for batchnorm or none
-            if self.hparams.norm == 'batch':
-                usebatch = True
-            elif self.hparams.norm == 'none':
-                usebatch = False
-            self.net_g = Generator(n_channels=self.hparams.input_nc, batch_norm=usebatch, final=self.hparams.final)
-            self.net_g_inc = 2
-        elif self.hparams.netG == 'descars':
-            from models.DeScarGan.descarganshallow import Generator
-            print('use descargan shallow generator')
+
+        elif (self.hparams.netG).startswith('descar'):
+            print('descar generator: ' + self.hparams.netG)
+            Generator = getattr(getattr(__import__('models.DeScarGan.' + self.hparams.netG), 'DeScarGan'),
+                                self.hparams.netG).Generator
             # descargan only has options for batchnorm or none
             if self.hparams.norm == 'batch':
                 usebatch = True
@@ -163,10 +121,17 @@ class BaseModel(pl.LightningModule):
             from models.AttGAN.attgan import Discriminators
             print('use attgan discriminator')
             self.net_d = Discriminators(img_size=256, cls=2)
+
         elif self.hparams.netD == 'descar':
             from models.DeScarGan.descargan import Discriminator
             print('use descargan discriminator')
-            self.net_d = Discriminator()
+            self.net_d = Discriminator(n_channels=self.hparams.input_nc * 2)
+        elif self.hparams.netD == 'descars':
+            from models.DeScarGan.descarganshallow import Discriminator
+            print('use descargan shallow discriminator')
+            self.net_d = Discriminator(n_channels=self.hparams.input_nc * 2)
+
+
         # original pix2pix, the size of patchgan is strange, just use for pixel-D
         else:
             self.net_d = define_D(input_nc=self.hparams.output_nc * 2, ndf=64, netD=self.hparams.netD)
@@ -218,18 +183,18 @@ class BaseModel(pl.LightningModule):
         if optimizer_idx == 0:
             imgs = self.generation()
             loss_d = self.backward_d(imgs)
-            self.log('loss_d', loss_d, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-            return loss_d
+            for name in self.loss_d_names:
+                self.log(name, loss_d[name], on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+            return loss_d['sum']
 
         if optimizer_idx == 1:
             imgs = self.generation()
             loss_g = self.backward_g(imgs)
-            self.log('loss_g', loss_g, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-            return loss_g
+            for name in self.loss_g_names:
+                self.log(name, loss_g[name], on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+            return loss_g['sum']
 
     def training_epoch_end(self, outputs):
-        self.net_g_scheduler.step()
-        self.net_d_scheduler.step()
         # checkpoint
         if self.epoch % 10 == 0:
             for name in self.netg_names.keys():
@@ -239,6 +204,12 @@ class BaseModel(pl.LightningModule):
 
         self.epoch += 1
         self.tini = time.time()
+        self.net_g_scheduler.step()
+        self.net_d_scheduler.step()
+
+    #def validation_step(self, batch, batch_idx):
+    #    self.batch = batch
+    #    print('v')
 
     def generation(self):
         return 0

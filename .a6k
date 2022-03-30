@@ -1,4 +1,4 @@
-# Paths
+pwd# Paths
 export LOGS='/home/ubuntu/Data/logs/'
 export DATASET='/home/ubuntu/Data/Dataset/paired_images/'
 

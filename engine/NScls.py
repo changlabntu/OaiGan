@@ -1,5 +1,19 @@
 from engine.base import BaseModel, combine
 import torch
+import torch.nn as nn
+import numpy as np
+
+
+class Classifier(nn.Module):
+    def __init__(self):
+        super(Classifier, self).__init__()
+        self.classifier = nn.Sequential(
+            nn.Linear(256, 2),
+        )
+
+    def forward(self, x):
+        x, _ = torch.max(x, 0)
+        return self.classifier(x).unsqueeze(0)
 
 
 class GAN(BaseModel):
@@ -8,9 +22,21 @@ class GAN(BaseModel):
     """
     def __init__(self, hparams, train_loader, test_loader, checkpoints):
         BaseModel.__init__(self, hparams, train_loader, test_loader, checkpoints)
+        self.classifier = Classifier()
+
+        from utils.metrics_classification import ClassificationLoss, GetAUC
+        self.loss_function = ClassificationLoss()
+        self.metrics = GetAUC()
+
+        # save model names
+        self.netd_names = {'net_d': 'netD', 'classifier': 'classifier'}
+        self.loss_g_names = ['loss_g']
+        self.loss_d_names = ['loss_d', 'loss_cls']
 
     @staticmethod
     def add_model_specific_args(parent_parser):
+        parser = parent_parser.add_argument_group("LitModel")
+        parser.add_argument("--lambC", type=float, default=1)
         return parent_parser
 
     def generation(self):
@@ -24,15 +50,17 @@ class GAN(BaseModel):
         if self.hparams.cmb is not None:
             self.imgX0 = combine(self.imgX0, self.oriX, method=self.hparams.cmb)
 
+        # classification
+
     def backward_g(self, inputs):
-        # ADV(X0, Y)+
         loss_g = 0
+        # ADV(X0, Y)+
         loss_g = self.add_loss_adv(a=self.imgX0, net_d=self.net_d, loss=loss_g, coeff=1, truth=True, stacked=False)
 
         # L1(X0, Y)
         loss_g = self.add_loss_L1(a=self.imgX0, b=self.oriY, loss=loss_g, coeff=self.hparams.lamb)
 
-        return loss_g
+        return {'sum': loss_g, 'loss_g': loss_g}
 
     def backward_d(self, inputs):
         loss_d = 0
@@ -42,7 +70,20 @@ class GAN(BaseModel):
         # ADV(X, Y)+
         loss_d = self.add_loss_adv(a=self.oriY, net_d=self.net_d, loss=loss_d, coeff=0.5, truth=True, stacked=False)
 
-        return loss_d
+        # Classification
+        clsX = self.net_d(torch.cat((self.oriX, self.oriX), 1))[2]
+        clsY = self.net_d(torch.cat((self.oriY, self.oriY), 1))[2]
+        clsX = self.classifier(clsX[:, :, 0, 0])
+        clsY = self.classifier(clsY[:, :, 0, 0])
+
+        if (np.random.rand(1) > 0.5)[0]:
+            cls = torch.cat([clsX, clsY], 0)
+            labels = torch.cat([torch.ones(1), torch.zeros(1)], 0).type(torch.LongTensor).cuda()
+        else:
+            cls = torch.cat([clsY, clsX], 0)
+            labels = torch.cat([torch.zeros(1), torch.ones(1)], 0).type(torch.LongTensor).cuda()
+        loss_cls = self.loss_function(cls, labels)
+        return {'sum': loss_d + loss_cls * self.hparams.lambC, 'loss_d': loss_d, 'loss_cls': loss_cls}
 
 
 

@@ -11,7 +11,7 @@ import pytorch_lightning as pl
 from utils.metrics_segmentation import SegmentationCrossEntropyLoss
 from utils.metrics_classification import CrossEntropyLoss, GetAUC
 from utils.data_utils import *
-from engine.base import BaseModel
+from engine.base import BaseModel, combine
 
 
 class GAN(BaseModel):
@@ -29,23 +29,12 @@ class GAN(BaseModel):
     def generation(self):
         self.oriX = self.batch[0]
         self.oriY = self.batch[1]
-        try:
-            self.imgX0 = self.net_g(self.oriX, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())[0]
-            self.imgX1 = self.net_g(self.oriX, a=torch.ones(self.oriX.shape[0], self.net_g_inc).cuda())[0]
-        except:
-            self.imgX0 = self.net_g(self.oriX)[0]
-            self.imgX1 = self.net_g(self.oriX)[0]
+        self.imgX0 = self.net_g(self.oriX, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())[0]
+        self.imgX1 = self.net_g(self.oriX, a=torch.ones(self.oriX.shape[0], self.net_g_inc).cuda())[0]
 
-        if self.hparams.res:
-            #self.imgX0 = (self.imgX0) + self.oriX
-            #self.imgX1 = (self.imgX1) + self.oriX
-
-            #print(self.imgX0.max())
-            #print(self.imgX0.min())
-
-            self.imgX0 = torch.mul(self.imgX0, self.oriX)
-            self.imgX1 = torch.mul(self.imgX1, self.oriX)
-
+        if self.hparams.cmb != 'none':
+            self.imgX0 = combine(self.imgX0, self.oriX, method=self.hparams.cmb)
+            self.imgX1 = combine(self.imgX1, self.oriX, method=self.hparams.cmb)
 
     def backward_g(self, inputs):
         # ADV(X0)+
@@ -58,7 +47,7 @@ class GAN(BaseModel):
         # L1(X1, X)
         loss_g = self.add_loss_L1(a=self.imgX1, b=self.oriX, loss=loss_g, coeff=self.hparams.lamb * 10)
 
-        return loss_g
+        return {'sum': loss_g, 'loss_g': loss_g}
 
     def backward_d(self, inputs):
         loss_d = 0
@@ -68,7 +57,7 @@ class GAN(BaseModel):
         # ADV(Y)+
         loss_d = self.add_loss_adv(a=self.oriY, net_d=self.net_d, loss=loss_d, coeff=0.5, truth=True)
 
-        return loss_d
+        return {'sum': loss_d, 'loss_d': loss_d}
 
 # CUDA_VISIBLE_DEVICES=0 python train.py --dataset pain -b 16 --prj VryNS4 --direction aregis1_b --resize 286 --engine NS4 --netG attgan
 # CUDA_VISIBLE_DEVICES=0 python train.py --dataset womac3 -b 16 --prj NS4/r256GDatt --direction aregis1_b --resize 256 --engine NS4 --netG attgan --netD attgan

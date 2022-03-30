@@ -54,14 +54,10 @@ class ClassificationLoss(nn.Module):
         return 1
 
     def forward(self, output, labels):
-        x = output[0]
-        y = labels[0]
-        loss_classify, = self.cross_entropy_loss(x, y)
-
-        loss_all = [loss_classify]
-        loss_val = loss_all[0]
-
-        return loss_val, loss_all
+        x = output
+        y = labels
+        loss_val, = self.cross_entropy_loss(x, y)
+        return loss_val
 
 
 class ClassifyAndContrastiveLoss(nn.Module):

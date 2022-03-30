@@ -164,7 +164,7 @@ class PairedData(data.Dataset):
         else:
             self.transforms = transforms
 
-        df = pd.read_csv('/media/ExtHDD01/OAI/OAI_extracted/OAI00womac3/OAI00womac3.csv')
+        df = pd.read_csv('notinuse/OAI00womac3.csv')
         self.labels = [(x, ) for x in df.loc[df['SIDE'] == 1, 'P01KPN#EV'].astype(np.int8)]
 
     def load_to_dict(self, names):
@@ -192,8 +192,9 @@ class PairedData(data.Dataset):
             x = x / x.max()
         if len(x.shape) == 2:  # if grayscale
             x = np.expand_dims(x, 2)
-        if x.shape[2] == 1:
-            x = np.concatenate([x]*3, 2)
+        if not self.opt.gray:
+            if x.shape[2] == 1:
+                x = np.concatenate([x]*3, 2)
         return x
 
     def __len__(self):

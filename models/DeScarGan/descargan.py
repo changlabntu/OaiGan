@@ -254,6 +254,7 @@ if __name__ == '__main__':
     #from utils.data_utils import print_num_of_parameters
     #print_num_of_parameters(g)
 
-    #d = Discriminator()
+    d = Discriminator()
+    dout = d(torch.rand(1, 6, 256, 256))
     #summary(g, [(3, 256, 256), (2)])
     #o = g(torch.rand(2, 3, 256, 256).cuda(), torch.ones(2, 2).cuda())

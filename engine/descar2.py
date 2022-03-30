@@ -55,7 +55,7 @@ class GAN(BaseModel):
         # L1(X0, X1)
         #loss_g = self.add_loss_L1(a=self.imgX0, b=self.imgX1, loss=loss_g, coeff=self.hparams.lamb * 0.1)
 
-        return loss_g
+        return {'sum': loss_g, 'loss_g': loss_g}
 
     def backward_d(self, inputs):
         loss_d = 0
@@ -71,7 +71,7 @@ class GAN(BaseModel):
         # ADV(X)+
         #loss_d = self.add_loss_adv(a=self.oriX, net_d=self.net_dY, loss=loss_d, coeff=0.5, truth=True)
 
-        return loss_d
+        return {'sum': loss_d, 'loss_d': loss_d}
 
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset womac3 -b 16 --prj descar2/GDdescarNoL1 --direction aregis1_b --cropsize 256 --engine descar2 --netG descar --netD descar
 
