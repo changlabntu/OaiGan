@@ -101,7 +101,6 @@ class Pix2PixModel:
         alpha = alpha / 100
 
         ###
-        self.net_g.train()
         try: ## descargan new
             output, output1 = self.net_g(in_img, alpha * torch.ones(1, 2).cuda())
         except:
@@ -255,13 +254,13 @@ for epoch in range(*args.nepochs):
             diff_XY = imgX - imgXY
 
             tag = True
-            diff = seperate_by_seg(x0=diff_XY, seg=imgXseg, masked=[], absolute=tag, threshold=0, rgb=tag)
-            diffseg0 = seperate_by_seg(x0=diff_XY, seg=imgXseg, masked=[0, 2, 4], absolute=tag, threshold=0, rgb=tag)
-            diffseg1 = seperate_by_seg(x0=diff_XY, seg=imgXseg, masked=[1, 3], absolute=tag, threshold=0, rgb=tag)
+            diff = seperate_by_seg(x0=diff_XY, seg=imgXYseg, masked=[], absolute=tag, threshold=0, rgb=tag)
+            diffseg0 = seperate_by_seg(x0=diff_XY, seg=imgXYseg, masked=[0, 2, 4], absolute=tag, threshold=0, rgb=tag)
+            diffseg1 = seperate_by_seg(x0=diff_XY, seg=imgXYseg, masked=[1, 3], absolute=tag, threshold=0, rgb=tag)
 
             to_show = [imgX,
                        imgXY,
-                       diff,
+                       #diff,
                        diffseg0,
                        diffseg1
                        ]
@@ -269,10 +268,18 @@ for epoch in range(*args.nepochs):
             to_print(to_show, save_name=os.path.join("outputs/results/", args.dataset, args.prj,
                                                      str(epoch) + '_' + str(alpha) + '_' + str(ii).zfill(4) + '.jpg'))
 
-            #to_print(to_show, save_name=os.path.join("outputs/results/a/",  str(ii).zfill(4) + '.jpg'))
-            if args.all:
-                result = diff#diffseg0
-                destination = '/media/ExtHDD01/Dataset/paired_images/womac3/test/bdiff/'
+            if 0:#args.all:
+                result = diffseg0
+                destination = 'outputs/results/seg0b/'
+                os.makedirs(destination, exist_ok=True)
+                if tag:
+                    to_save = result[0, ::].permute(1, 2, 0).numpy().astype(np.float16)
+                else:
+                    to_save = result[0, 0, ::].numpy().astype(np.float32)
+                tiff.imsave(os.path.join(destination,  names[0][0].split('/')[-1]), to_save)
+
+                result = diffseg1
+                destination = 'outputs/results/seg1b/'
                 os.makedirs(destination, exist_ok=True)
                 if tag:
                     to_save = result[0, ::].permute(1, 2, 0).numpy().astype(np.float16)

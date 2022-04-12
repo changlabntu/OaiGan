@@ -107,8 +107,12 @@ class MultiData(data.Dataset):
         paired_path = path.split('%')
         self.subset = []
         for p in range(len(paired_path)):
-            self.subset.append(PairedData(root=root, path=paired_path[p],
-                                          opt=opt, mode=mode, transforms=transforms, filenames=filenames, index=index))
+            if self.opt.bysubject:
+                self.subset.append(PairedData3D(root=root, path=paired_path[p],
+                                                opt=opt, mode=mode, transforms=transforms, filenames=filenames, index=index))
+            else:
+                self.subset.append(PairedData(root=root, path=paired_path[p],
+                                              opt=opt, mode=mode, transforms=transforms, filenames=filenames, index=index))
 
     def __len__(self):
         return min([len(x) for x in self.subset])
@@ -124,7 +128,7 @@ class MultiData(data.Dataset):
             return outputs_all, filenames_all
         else:
             for i in range(len(self.subset)):
-                outputs, _ = self.subset[i].__getitem__(index)
+                outputs = self.subset[i].__getitem__(index)
                 outputs_all = outputs_all + outputs
             return outputs_all
 
@@ -164,8 +168,11 @@ class PairedData(data.Dataset):
         else:
             self.transforms = transforms
 
-        df = pd.read_csv('notinuse/OAI00womac3.csv')
-        self.labels = [(x, ) for x in df.loc[df['SIDE'] == 1, 'P01KPN#EV'].astype(np.int8)]
+        if 0:
+            df = pd.read_csv('notinuse/OAI00womac3.csv')
+            self.labels = [(x, ) for x in df.loc[df['SIDE'] == 1, 'P01KPN#EV'].astype(np.int8)]
+        else:
+            self.labels = [0] * len(self.images)  ## WRONG
 
     def load_to_dict(self, names):
         out = dict()
@@ -278,6 +285,97 @@ class PairedData3D(PairedData):
             return outputs#, self.labels[index]
 
 
+class PairedDataTif(data.Dataset):
+    """
+    Multiple unpaired data ccombined
+    """
+    def __init__(self, root, opt, mode, transforms=None, filenames=False, index=None):
+        self.filenames = filenames
+        self.index = index
+        self.subjects = sorted(glob.glob(root + '*'))
+        self.opt = opt
+        self.mode = mode
+
+        if self.opt.resize == 0:
+            self.resize = tiff.imread(self.subjects[0]).shape[1]
+        else:
+            self.resize = self.opt.resize
+
+        if self.opt.cropsize == 0:
+            self.cropsize = self.resize
+        else:
+            self.cropsize = self.opt.cropsize
+
+        if transforms is None:
+            additional_targets = dict()
+            for i in range(1, 100):#len(self.all_path)):
+                additional_targets[str(i).zfill(4)] = 'image'
+            self.transforms = get_transforms(crop_size=opt.cropsize,
+                                             resize=opt.resize,
+                                             additional_targets=additional_targets)[mode]
+        else:
+            self.transforms = transforms
+
+    def npy3d_to_dict(self, npy3d):
+        out = dict()
+        for i in range(npy3d.shape[0]):
+            out[str(i).zfill(4)] = npy3d[i, :, :]
+        out['image'] = out.pop('0000')  # the first image in albumentation need to be named "image"
+        return out
+
+    def get_augumentation(self, inputs):
+        outputs = []
+        augmented = self.transforms(**inputs)
+        augmented['0000'] = augmented.pop('image')  # 'change image back to 0'
+        for k in sorted(list(augmented.keys())):
+            if self.opt.n01:
+                outputs = outputs + [augmented[k], ]
+            else:
+                outputs = outputs + [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(augmented[k]), ]
+        return outputs
+
+    def __len__(self):
+        if self.index is not None:
+            return len(self.index)
+        else:
+            return len(self.subjects)
+
+    def __getitem__(self, idx):
+        if self.index is not None:
+            index = self.index[idx]
+        else:
+            index = idx
+
+        # load and normalize
+        npy3d = tiff.imread(self.subjects[index])
+        npy3d[npy3d >= 800] = 800
+        npy3d = npy3d / npy3d.max()
+        npy3d = npy3d.astype(np.float32)
+
+        x = self.npy3d_to_dict(npy3d)
+        x = self.get_augumentation(x)
+        x = torch.cat(x, 0)
+        x = x.permute(1, 2, 0).unsqueeze(0)
+        x = x.repeat(3, 1, 1, 1)
+
+        outputs = [x, x]
+
+        # return only images or with filenames
+        if self.filenames:
+            return outputs, self.labels[index], filenames
+        else:
+            return outputs#, self.labels[index]
+
+if 0:
+    opt.cropsize = 384
+    opt.resize = 444
+
+    p = PairedDataTif(root='/media/ghc/GHc_data2/OAI_extracted/bmlall2/Npy/SAG_IW_TSE_/',
+                      opt=opt, mode='train', transforms=None, filenames=False, index=None)
+
+    x = p.__getitem__(10)
+
+
 if __name__ == '__main__':
     from dotenv import load_dotenv
     import argparse
@@ -305,7 +403,7 @@ if __name__ == '__main__':
     dataset3d = PairedData3D(root=root, path=opt.direction, opt=opt, mode='train', filenames=False)
     x3d = dataset3d.__getitem__(100)
 
-    dataset3d = MultiData(root=root, path='areg_b%areg', opt=opt, mode='train', filenames=False)
+    dataset3d = MultiData(root=root, path='areg_b_aregseg_bseg', opt=opt, mode='train', filenames=False)
     xm = dataset3d.__getitem__(100)
 
     #  Dataset

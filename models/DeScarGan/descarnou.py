@@ -93,7 +93,7 @@ class Generator(nn.Module):
         max_pool = nn.MaxPool2d(2)
         act = activation
         self.label_k = torch.tensor([0, 1]).half().cuda()
-        self.c_dim = 0
+        self.c_dim = 2
 
         self.down0 = nn.Sequential(
             conv_block(n_channels + self.c_dim, nf, activation=act),
@@ -143,6 +143,13 @@ class Generator(nn.Module):
         self.encoder = nn.Sequential(self.down0, self.down1, self.down2, self.down3)
 
     def forward(self, x, a):
+        # c: (B, C)
+        if self.c_dim > 0:
+            c = a
+            c1 = c.view(c.size(0), c.size(1), 1, 1)
+            c1 = c1.repeat(1, 1, x.size(2), x.size(3))  # (B, 2, H, W)
+            x = torch.cat([x, c1], dim=1)
+
         x0 = self.down0(x)
         x1 = self.down1(x0)
         x2 = self.down2(x1)

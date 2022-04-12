@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from utils.make_config import *
 import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
+import pandas as pd
 
 
 def prepare_log(args):
@@ -32,6 +33,7 @@ parser.add_argument('--engine', dest='engine', type=str, help='use which engine'
 # Data
 parser.add_argument('--dataset', type=str)
 parser.add_argument('--bysubject', action='store_true', dest='bysubject', default=False)
+parser.add_argument('--index', action='store_true', dest='index', default=False, help='use train_index')
 parser.add_argument('--direction', type=str, help='a2b or b2a')
 parser.add_argument('--flip', action='store_true', dest='flip', help='image flip left right')
 parser.add_argument('--resize', type=int, help='size for resizing before cropping, 0 for no resizing')
@@ -92,19 +94,33 @@ else:
 args = prepare_log(args)
 if args.gray:
     args.input_nc = 1
+    args.output_nc = 1
 
 #  Define Dataset Class
-from dataloader.data_multi import PairedData3D as Dataset
+from dataloader.data_multi import MultiData as Dataset
 
 # Load Dataset and DataLoader
-train_set = Dataset(root=os.environ.get('DATASET') + args.dataset + '/train/',
+if args.index:
+    folder = '/full/'
+    # train_index = range(*args.train_index)
+    # new index
+    df = pd.read_csv('/home/ghc/Dropbox/TheSource/scripts/OAI_pipelines/meta/subjects_unipain_womac3.csv')
+    train_index = [x for x in range(df.shape[0]) if not df['has_moaks'][x]]
+    eval_index = [x for x in range(df.shape[0]) if df['has_moaks'][x]]
+    # train_index = range(213, 710)
+    # eval_index = range(0, 213)
+else:
+    folder = '/train/'
+    train_index = None
+train_set = Dataset(root=os.environ.get('DATASET') + args.dataset + folder,
                     path=args.direction,
-                    opt=args, mode='train')
+                    opt=args, mode='train', index=train_index)
 train_loader = DataLoader(dataset=train_set, num_workers=args.threads, batch_size=args.batch_size, shuffle=True)
-val_set = Dataset(root=os.environ.get('DATASET') + args.dataset + '/test/',
-                  path=args.direction,
-                  opt=args, mode='test')
-val_loader = DataLoader(dataset=val_set, num_workers=args.threads, batch_size=args.batch_size, shuffle=False)
+#val_set = Dataset(root=os.environ.get('DATASET') + args.dataset + '/test/',
+#                  path=args.direction,
+#                  opt=args, mode='test')
+#val_loader = DataLoader(dataset=val_set, num_workers=args.threads, batch_size=args.batch_size, shuffle=False)
+print(len(train_set))
 
 # Trainer
 logger = pl_loggers.TensorBoardLogger(os.environ.get('LOGS') + args.dataset + '/', name=args.prj)
@@ -115,7 +131,7 @@ net = GAN(hparams=args, train_loader=None,
 trainer = pl.Trainer(gpus=[0],  # distributed_backend='ddp',
                      max_epochs=args.n_epochs, progress_bar_refresh_rate=20, logger=logger)
 print(args)
-trainer.fit(net, train_loader, val_loader)  # test loader not used during training
+trainer.fit(net, train_loader)  # test loader not used during training
 
 
 # Example Usage
@@ -124,5 +140,6 @@ trainer.fit(net, train_loader, val_loader)  # test loader not used during traini
 # CUDA_VISIBLE_DEVICES=0 python train.py --dataset FlyZ -b 16 --prj WpWn286B --direction xyweak%zyweak --resize 286 --engine cyclegan --lamb 10
 # CUDA_VISIBLE_DEVICES=1 python train.py --dataset FlyZ -b 16 --prj WpOp256Mask --direction xyweak_xyorisb --resize 256 --engine pix2pixNS
 
+# CUDA_VISIBLE_DEVICES=0 python train.py --jsn womac3 --prj mcfix/descar2/Gunet128 --engine descar2 --netG unet_128 --mc --direction areg_b --index
 
 # CUDA_VISIBLE_DEVICES=0 python train.py --dataset womac3 -b 1 --prj bysubjectright/descar2/GDdescars --direction areg_b --cropsize 256 --engine descar2 --netG descars --netD descar --n01 --final sigmoid --cmb mul --bysubject

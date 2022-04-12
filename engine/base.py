@@ -2,8 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision
 import torch.optim as optim
-from models.networks import define_G, define_D
-from models.networks import get_scheduler
+from models.networks2 import get_scheduler
 from models.loss import GANLoss
 from math import log10
 import time, os
@@ -100,6 +99,7 @@ class BaseModel(pl.LightningModule):
             self.net_g = Generator(n_channels=self.hparams.input_nc, batch_norm=usebatch, final=self.hparams.final)
             self.net_g_inc = 2
         else:
+            from models.networks2 import define_G
             self.net_g = define_G(input_nc=self.hparams.input_nc, output_nc=self.hparams.output_nc,
                                   ngf=self.hparams.ngf, netG=self.hparams.netG,
                                   norm=self.hparams.norm, use_dropout=self.hparams.mc, init_type='normal', init_gain=0.02, gpu_ids=[])
@@ -130,10 +130,9 @@ class BaseModel(pl.LightningModule):
             from models.DeScarGan.descarganshallow import Discriminator
             print('use descargan shallow discriminator')
             self.net_d = Discriminator(n_channels=self.hparams.input_nc * 2)
-
-
         # original pix2pix, the size of patchgan is strange, just use for pixel-D
         else:
+            from models.networks import define_D
             self.net_d = define_D(input_nc=self.hparams.output_nc * 2, ndf=64, netD=self.hparams.netD)
 
     def configure_optimizers(self):

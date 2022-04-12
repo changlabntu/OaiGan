@@ -3,6 +3,7 @@
     "prj": "default",
     "engine": "NS",
     "dataset": "womac3",
+    "train_index": [213, 710, 1],
     "bysubject": true,
     "direction": "areg_b",
     "flip": false,
