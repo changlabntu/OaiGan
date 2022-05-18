@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision
 import torch.optim as optim
-from models.networks2 import get_scheduler
+from models.networks import get_scheduler
 from models.loss import GANLoss
 from math import log10
 import time, os
@@ -32,6 +32,8 @@ def combine(x, y, method):
 class BaseModel(pl.LightningModule):
     def __init__(self, hparams, train_loader, test_loader, checkpoints):
         super(BaseModel, self).__init__()
+        self.train_loader = train_loader
+
         # initialize
         self.tini = time.time()
         self.epoch = 0
@@ -52,13 +54,6 @@ class BaseModel(pl.LightningModule):
         # set networks
         self.set_networks()
 
-        # Init. Network Parameters
-        self.net_g = self.net_g.apply(_weights_init)
-        if self.hparams.netD == 'sagan':
-            print('not init for netD of sagan')
-        else:
-            self.net_d = self.net_d.apply(_weights_init)
-
         # Optimizer and scheduler
         [self.optimizer_d, self.optimizer_g], [] = self.configure_optimizers()
         self.net_g_scheduler = get_scheduler(self.optimizer_g, self.hparams)
@@ -76,12 +71,16 @@ class BaseModel(pl.LightningModule):
         # Final
         self.hparams.update(vars(self.hparams))   # updated hparams to be logged in tensorboard
 
+    def test_method(self, net_g, x):
+        output, = net_g(x[0])
+        return output
+
     def set_networks(self):
         # GENERATOR
         if self.hparams.netG == 'attgan':
             from models.AttGAN.attgan import Generator
             print('use attgan generator')
-            self.net_g = Generator(enc_dim=self.hparams.ngf, dec_dim=self.hparams.ngf,
+            self.net_g = Generator(n_in=self.hparams.input_nc, enc_dim=self.hparams.ngf, dec_dim=self.hparams.ngf,
                                    n_attrs=self.hparams.n_attrs, img_size=256,
                                    enc_norm_fn=self.hparams.norm, dec_norm_fn=self.hparams.norm,
                                    final=self.hparams.final)
@@ -96,19 +95,27 @@ class BaseModel(pl.LightningModule):
                 usebatch = True
             elif self.hparams.norm == 'none':
                 usebatch = False
-            self.net_g = Generator(n_channels=self.hparams.input_nc, batch_norm=usebatch, final=self.hparams.final)
+            self.net_g = Generator(n_channels=self.hparams.input_nc, out_channels=self.hparams.output_nc, batch_norm=usebatch, final=self.hparams.final)
             self.net_g_inc = 2
-        else:
+        elif (self.hparams.netG).startswith('uneta'):
             from models.networks2 import define_G
+            self.net_g_inc = 1
             self.net_g = define_G(input_nc=self.hparams.input_nc, output_nc=self.hparams.output_nc,
                                   ngf=self.hparams.ngf, netG=self.hparams.netG,
-                                  norm=self.hparams.norm, use_dropout=self.hparams.mc, init_type='normal', init_gain=0.02, gpu_ids=[])
+                                  norm=self.hparams.norm, use_dropout=self.hparams.mc, init_type='normal', init_gain=0.02, gpu_ids=[],
+                                  final=self.hparams.final)
+        else:
+            from models.networks import define_G
+            self.net_g = define_G(input_nc=self.hparams.input_nc, output_nc=self.hparams.output_nc,
+                                  ngf=self.hparams.ngf, netG=self.hparams.netG,
+                                  norm=self.hparams.norm, use_dropout=self.hparams.mc, init_type='normal', init_gain=0.02, gpu_ids=[],
+                                  final=self.hparams.final)
             self.net_g_inc = 0
 
         # DISCRIMINATOR
         if (self.hparams.netD).startswith('patch'):  # Patchgan from cyclegan (the pix2pix one is strange)
             from models.cyclegan.models import Discriminator
-            self.net_d = Discriminator(input_shape=(self.hparams.input_nc * 2, 256, 256), patch=int((self.hparams.netD).split('_')[-1]))
+            self.net_d = Discriminator(input_shape=(self.hparams.output_nc * 2, 256, 256), patch=int((self.hparams.netD).split('_')[-1]))
         elif self.hparams.netD == 'sagan':
             from models.sagan.sagan import Discriminator
             print('use sagan discriminator')
@@ -116,12 +123,11 @@ class BaseModel(pl.LightningModule):
         elif self.hparams.netD == 'acgan':
             from models.acgan import Discriminator
             print('use acgan discriminator')
-            self.net_d = Discriminator(img_shape=(self.hparams.input_nc * 2, 256, 256), n_classes=2)
+            self.net_d = Discriminator(img_shape=(self.hparams.input_nc_nc * 2, 256, 256), n_classes=2)
         elif self.hparams.netD == 'attgan':
             from models.AttGAN.attgan import Discriminators
             print('use attgan discriminator')
             self.net_d = Discriminators(img_size=256, cls=2)
-
         elif self.hparams.netD == 'descar':
             from models.DeScarGan.descargan import Discriminator
             print('use descargan discriminator')
@@ -134,6 +140,13 @@ class BaseModel(pl.LightningModule):
         else:
             from models.networks import define_D
             self.net_d = define_D(input_nc=self.hparams.output_nc * 2, ndf=64, netD=self.hparams.netD)
+
+        # Init. Network Parameters
+        self.net_g = self.net_g.apply(_weights_init)
+        if self.hparams.netD == 'sagan':
+            print('not init for netD of sagan')
+        else:
+            self.net_d = self.net_d.apply(_weights_init)
 
     def configure_optimizers(self):
         netg_parameters = []
@@ -171,11 +184,12 @@ class BaseModel(pl.LightningModule):
         return loss
 
     def training_step(self, batch, batch_idx, optimizer_idx):
+        self.batch_idx = batch_idx
         self.batch = batch
         if self.hparams.bysubject:  # if working on 3D input
             if len(self.batch[0].shape) == 5:
-                (B, C, H, W, Z) = self.batch[0].shape
                 for i in range(len(self.batch)):
+                    (B, C, H, W, Z) = self.batch[i].shape
                     self.batch[i] = self.batch[i].permute(0, 4, 1, 2, 3)
                     self.batch[i] = self.batch[i].reshape(B * Z, C, H, W)
 

@@ -160,7 +160,7 @@ class PairedData(data.Dataset):
 
         if transforms is None:
             additional_targets = dict()
-            for i in range(1, 100):#len(self.all_path)):
+            for i in range(1, 1000):#len(self.all_path)):
                 additional_targets[str(i).zfill(4)] = 'image'
             self.transforms = get_transforms(crop_size=self.cropsize,
                                              resize=self.resize,
@@ -189,12 +189,18 @@ class PairedData(data.Dataset):
             if self.opt.n01:
                 outputs = outputs + [augmented[k], ]
             else:
-                outputs = outputs + [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(augmented[k]), ]
+                if augmented[k].shape[0] == 3:
+                    outputs = outputs + [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))(augmented[k]), ]
+                elif augmented[k].shape[0] == 1:
+                    outputs = outputs + [transforms.Normalize(0.5, 0.5)(augmented[k]), ]
         return outputs
 
     def load_img(self, path):
         x = Image.open(path)
         x = np.array(x).astype(np.float32)
+
+        #x[x <= 2] = 0
+
         if x.max() > 0:  # scale to 0-1
             x = x / x.max()
         if len(x.shape) == 2:  # if grayscale
@@ -226,7 +232,7 @@ class PairedData(data.Dataset):
         if self.filenames:
             return outputs, self.labels[index], filenames
         else:
-            return outputs, self.labels[index]
+            return outputs#, self.labels[index]
 
 
 class PairedData3D(PairedData):
@@ -308,7 +314,7 @@ class PairedDataTif(data.Dataset):
 
         if transforms is None:
             additional_targets = dict()
-            for i in range(1, 100):#len(self.all_path)):
+            for i in range(1, 1000):#len(self.all_path)):
                 additional_targets[str(i).zfill(4)] = 'image'
             self.transforms = get_transforms(crop_size=opt.cropsize,
                                              resize=opt.resize,

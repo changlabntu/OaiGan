@@ -93,7 +93,7 @@ class Generator(nn.Module):
         max_pool = nn.MaxPool2d(2)
         act = activation
         self.label_k = torch.tensor([0, 1]).half().cuda()
-        self.c_dim = 2
+        self.c_dim = 0
 
         self.down0 = nn.Sequential(
             conv_block(n_channels + self.c_dim, nf, activation=act),

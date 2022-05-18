@@ -20,8 +20,7 @@ class GAN(BaseModel):
             self.imgX0 = self.net_g(self.oriX, a=torch.zeros(self.oriX.shape[0], self.net_g_inc).cuda())[0]
         except:
             self.imgX0 = self.net_g(self.oriX)[0]
-
-        if self.hparams.cmb is not None:
+        if self.hparams.cmb is not False:
             self.imgX0 = combine(self.imgX0, self.oriX, method=self.hparams.cmb)
 
     def backward_g(self, inputs):

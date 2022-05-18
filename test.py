@@ -20,38 +20,6 @@ import matplotlib.pyplot as plt
 cm = plt.get_cmap('viridis')
 
 
-def to_heatmap(x):
-    return cm(x)
-
-
-def overlap_red(x0, y0):
-    y = 1 * y0
-    x = 1 * x0
-    x = x - x.min()
-    x = x / x.max()
-
-    c = 0
-    x[1, y == c] = 0.1 * x[1, y == c]
-    x[2, y == c] = 0.1 * x[2, y == c]
-
-    c = 1
-    x[0, y == c] = 0.1 * x[0, y == c]
-    x[2, y == c] = 0.1 * x[2, y == c]
-
-    c = 3
-    x[0, y == c] = 0.1 * x[0, y == c]
-    x[2, y == c] = 0.1 * x[2, y == c]
-
-    c = 2
-    x[0, y == c] = 0.1 * x[0, y == c]
-    x[1, y == c] = 0.1 * x[1, y == c]
-
-    c = 4
-    x[0, y == c] = 0.1 * x[0, y == c]
-    x[1, y == c] = 0.1 * x[1, y == c]
-    return x
-
-
 class Pix2PixModel:
     def __init__(self, args):
         self.args = args
@@ -94,14 +62,12 @@ class Pix2PixModel:
         x, name = self.test_set.__getitem__(i)
         oriX = x[0].unsqueeze(0).to(self.device)
         oriY = x[1].unsqueeze(0).to(self.device)
-
         in_img = oriX
         out_img = oriY
 
         alpha = alpha / 100
 
-        ###
-        try: ## descargan new
+        try:
             output, output1 = self.net_g(in_img, alpha * torch.ones(1, 2).cuda())
         except:
             try: ## descargan
@@ -118,7 +84,7 @@ class Pix2PixModel:
             out_img = out_img.repeat(1, 3, 1, 1)
             output = output.repeat(1, 3, 1, 1)
 
-        if args.cmb != "None":
+        if args.cmb is not False:
             output = combine(output, in_img, args.cmb)
 
         in_img = in_img.detach().cpu()

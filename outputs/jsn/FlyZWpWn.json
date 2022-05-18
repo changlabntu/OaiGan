@@ -1,0 +1,39 @@
+{
+    "dataset": "Fly3D",
+    "testset": "Fly3D/train/",
+    "unpaired": false,
+    "gray": true,
+    "bysubject": true,
+    "direction": "zyweak_zyori",
+    "prj": "WpWn256",
+    "netg": "netGXY",
+    "resize": 0,
+    "cropsize": 512,
+    "cmb": false,
+    "n01": false,
+    "irange": [
+        9
+    ],
+    "flip": false,
+    "eval": false,
+    "nepochs": [
+        0,
+        210,
+        10
+    ],
+    "nalpha": [
+        0,
+        100,
+        1
+    ],
+    "show": [
+        "oriX",
+        "oriY",
+        "imgXY",
+        "diff_imgXY_oriX"
+    ],
+    "mode": "client",
+    "port": "45727",
+    "usage": "python test.py --jsn FlyZWpWn --direction zyori%xyorisb --prj check/wnwp/0/ --nalpha 0 20 21"
+
+}

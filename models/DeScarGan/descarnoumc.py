@@ -85,7 +85,7 @@ class Att(nn.Module): #layers was 5
 from models.DeScarGan.descargan import conv2d_block, conv2d_bn_block, deconv2d_bn_block, get_activation
 
 class Generator(nn.Module):
-    def __init__(self, n_channels=1, nf=32, batch_norm=True, activation=nn.ReLU, final='tanh'):
+    def __init__(self, n_channels=1, out_channels=1, nf=32, batch_norm=True, activation=nn.ReLU, final='tanh'):
         super(Generator, self).__init__()
 
         conv_block = conv2d_bn_block if batch_norm else conv2d_block
@@ -137,11 +137,11 @@ class Generator(nn.Module):
         final_layer = get_activation(final)
 
         self.conv7_k = nn.Sequential(
-            conv_block(nf, n_channels, activation=final_layer),
+            conv_block(nf, out_channels, activation=final_layer),
         )
 
         self.conv7_g = nn.Sequential(
-            conv_block(nf, n_channels, activation=final_layer),
+            conv_block(nf, out_channels, activation=final_layer),
         )
 
         self.encoder = nn.Sequential(self.down0, self.down1, self.down2, self.down3)

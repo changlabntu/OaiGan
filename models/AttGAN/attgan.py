@@ -15,7 +15,7 @@ MAX_DIM = 64 * 16  # 1024
 
 
 class Generator(nn.Module): #layers was 5
-    def __init__(self, enc_dim=64, enc_layers=5, enc_norm_fn='batch', enc_acti_fn='lrelu',
+    def __init__(self, n_in=3, enc_dim=64, enc_layers=5, enc_norm_fn='batch', enc_acti_fn='lrelu',
                  dec_dim=64, dec_layers=5, dec_norm_fn='batch', dec_acti_fn='relu',
                  n_attrs=1, shortcut_layers=1, inject_layers=0, img_size=128, final='tanh'):
         super(Generator, self).__init__()
@@ -24,7 +24,6 @@ class Generator(nn.Module): #layers was 5
         self.f_size = img_size // 2 ** enc_layers  # f_size = 4 for 128x128
 
         layers = []
-        n_in = 3
         for i in range(enc_layers):
             n_out = min(enc_dim * 2 ** i, MAX_DIM)
             layers += [Conv2dBlock(

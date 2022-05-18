@@ -79,7 +79,7 @@ GAN = getattr(__import__('engine.' + engine), engine).GAN
 parser = GAN.add_model_specific_args(parser)
 
 # Read json file and update it
-with open('engine/' + parser.parse_args().jsn + '.json', 'rt') as f:
+with open('engine/jsn/' + parser.parse_args().jsn + '.json', 'rt') as f:
     t_args = argparse.Namespace()
     t_args.__dict__.update(json.load(f))
     args = parser.parse_args(namespace=t_args)
@@ -92,9 +92,9 @@ else:
 
 # Finalize Arguments and create files for logging
 args = prepare_log(args)
-if args.gray:
-    args.input_nc = 1
-    args.output_nc = 1
+#if args.gray:`
+#    args.input_nc = 1
+#    args.output_nc = 1
 
 #  Define Dataset Class
 from dataloader.data_multi import MultiData as Dataset
@@ -126,8 +126,7 @@ print(len(train_set))
 logger = pl_loggers.TensorBoardLogger(os.environ.get('LOGS') + args.dataset + '/', name=args.prj)
 checkpoints = os.path.join(os.environ.get('LOGS'), args.dataset, args.prj, 'checkpoints')
 os.makedirs(checkpoints, exist_ok=True)
-net = GAN(hparams=args, train_loader=None,
-          test_loader=None, checkpoints=checkpoints)
+net = GAN(hparams=args, train_loader=train_loader, test_loader=None, checkpoints=checkpoints)
 trainer = pl.Trainer(gpus=[0],  # distributed_backend='ddp',
                      max_epochs=args.n_epochs, progress_bar_refresh_rate=20, logger=logger)
 print(args)

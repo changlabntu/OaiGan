@@ -1,5 +1,6 @@
-from engine.base import BaseModel
+from engine.base import BaseModel, combine
 import copy
+import torch
 
 
 class GAN(BaseModel):
@@ -26,6 +27,11 @@ class GAN(BaseModel):
         parser.add_argument("--lambI", type=int, default=0.5)
         return parent_parser
 
+    def test_method(self, net_g, x):
+        output,  = net_g(x[0])
+        #output = combine(output, x[0], method='mul')
+        return output
+
     def generation(self):
         self.oriX = self.batch[0]
         self.oriY = self.batch[1]
@@ -39,6 +45,7 @@ class GAN(BaseModel):
         if self.hparams.lambI > 0:
             self.idt_X = self.net_gYX(self.oriX)[0]
             self.idt_Y = self.net_gXY(self.oriY)[0]
+
 
     def backward_g(self, inputs):
         loss_g = 0
@@ -58,7 +65,7 @@ class GAN(BaseModel):
             # Identity(idt_Y, Y)
             loss_g = self.add_loss_L1(a=self.idt_Y, b=self.oriY, loss=loss_g, coeff=self.hparams.lambI)
 
-        return loss_g
+        return {'sum': loss_g, 'loss_g': loss_g}
 
     def backward_d(self, inputs):
         loss_d = 0
@@ -74,9 +81,12 @@ class GAN(BaseModel):
         # ADV(X)+
         loss_d = self.add_loss_adv(a=self.oriX, net_d=self.net_dX, loss=loss_d, coeff=1, truth=True, stacked=False)
 
-        return loss_d
+        return {'sum': loss_d, 'loss_d': loss_d}
 
 
 # USAGE
-# CUDA_VISIBLE_DEVICES=1 python train.py --dataset FlyZ -b 16 --prj WpWn256test --direction xyweak%zyweak --resize 256 --engine cyclegan --lamb 10
+# CUDA_VISIBLE_DEVICES=1 python train.py --dataset FlyZ -b 16 --prj WpWn256test --direction xyweak%zyweak --resize 256 --engine cyclegan --lamb 10 --input_nc 2 --output_nc 2
 
+# CUDA_VISIBLE_DEVICES=1 python train.py --jsn wnwp --prj wnwp/cyc2/0test --engine cyclegan --cropsize 128 --direction zyweak%xyweak --input_nc 1 --output_nc 1 --gray --netG unet_128
+
+# CUDA_VISIBLE_DEVICES=1 python train.py --jsn wnwp --prj wnwp/cyc2/testcyc --engine cyclegan --cmb mul --final tanh --n01  --cropsize 128 --dataset Fly3D --lamb 10 --direction zyweak%xyweak

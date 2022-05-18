@@ -53,17 +53,11 @@ class Pix2PixModel:
         self.seg_cartilage.eval()
         self.seg_bone.eval()
 
-        #self.magic256 = torch.load('/media/ExtHDD01/checkpoints/FlyZ_WpOp/netG_model_epoch_170.pth').cuda()
-        #self.magic286 = torch.load('/media/ExtHDD01/checkpoints/FlyZ_WpOp/netG_model_epoch_170.pth').cuda()
-        #self.magic286 = torch.load('/media/ExtHDD01/checkpointsold/FlyZ_WpOp286Mask/netG_model_epoch_10.pth').cuda()
-
-        self.device = torch.device("cuda:0")
-
     def get_model(self,  epoch, eval=False):
         model_path = os.path.join(self.dir_checkpoints, self.args.dataset, self.args.prj, 'checkpoints') + \
                ('/' + self.args.netg + '_model_epoch_{}.pth').format(epoch)
         print(model_path)
-        net = torch.load(model_path).to(self.device)
+        net = torch.load(model_path).cuda()
         if eval:
             net.eval()
             print('eval mode')
@@ -75,33 +69,34 @@ class Pix2PixModel:
     def get_one_output(self, i, alpha=None):
         # inputs
         x, name = self.test_set.__getitem__(i)
-        oriX = x[0].unsqueeze(0).to(self.device)
-        oriY = x[1].unsqueeze(0).to(self.device)
-        in_img = oriX
-        out_img = oriY
+
+        if args.bysubject:
+            x = [y.permute(3, 0, 1, 2) for y in x]
+        else:
+            x = [y.unsqueeze(0) for y in x]
+
+        oriX = x[0].cuda()
+        oriY = x[1].cuda()
 
         alpha = alpha / 100
 
-        #try:
-        output, output1 = self.net_g(in_img, alpha * torch.ones(1, 2).cuda())
-        #except:
-        #    output, = self.net_g(in_img)
-        #    output1 = output
+        output, output1 = self.net_g(oriX, alpha * torch.ones(1, 2).cuda())
 
         if self.args.gray:
-            in_img = in_img.repeat(1, 3, 1, 1)
-            out_img = out_img.repeat(1, 3, 1, 1)
+            oriX = oriX.repeat(1, 3, 1, 1)
+            oriY = oriY.repeat(1, 3, 1, 1)
             output = output.repeat(1, 3, 1, 1)
 
         if args.cmb != "None":
-            output = combine(output, in_img, args.cmb)
-            output1 = combine(output1, in_img, args.cmb)
+            output = combine(output, oriX, args.cmb)
+            output1 = combine(output1, oriX, args.cmb)
 
-        in_img = in_img.detach().cpu()
-        out_img = out_img.detach().cpu()
+        oriX = oriX.detach().cpu()
+        oriY = oriY.detach().cpu()
         output = output.detach().cpu()
         output1 = output1.detach().cpu()
-        return in_img, out_img, output, output1
+
+        return oriX, oriY, output, output1, name
 
     def get_segmentation(self, x0):
         # normalize
@@ -208,6 +203,27 @@ def to_heatmap(x):
     x = x / x.max()
     return np.transpose(cm(x)[:, :, :3], (2, 0, 1))
 
+
+def get_iirange():
+    #iirange = [14, 24, 190, 270, 283, 459, 503, 149, 244, 338, 437, 442, 618, 628, 658]
+    #iirange = [29, 39, 119, 139, 212]
+    #iirange = [222, 236, 250, 279, 336]
+    iirange = [39, 57, 76, 112, 118, 124, 139, 162, 212, 234, 247, 390, 482, 496, 542, 568, 591, 598, 607, 623, 695, 718, 779, 787, 792]
+
+    import pandas as pd
+    df = pd.read_csv('/home/ghc/Dropbox/TheSource/scripts/OAI_pipelines/meta/subjects_unipain_womac3.csv')
+    train_index = [x for x in range(df.shape[0]) if not df['has_moaks'][x]]
+    eval_index = [x for x in range(df.shape[0]) if df['has_moaks'][x]]
+
+    ti = [list(range(x*23, x*23+23)) for x in eval_index[:]]
+    iirange = []
+    for l in ti:
+        iirange = iirange + l
+
+    #iirange = [iirange[x] for x in [8, 23, 25, 141, 163, 176, 186, 187, 206, 212, 279, 280]]
+    return iirange
+
+
 for epoch in range(*args.nepochs):
     test_unit.get_model(epoch, eval=args.eval)
 
@@ -216,10 +232,7 @@ for epoch in range(*args.nepochs):
     else:
         iirange = range(1)
 
-    #iirange = [14, 24, 190, 270, 283, 459, 503, 149, 244, 338, 437, 442, 618, 628, 658]
-    #iirange = [29, 39, 119, 139, 212]
-    #iirange = [222, 236, 250, 279, 336]
-    iirange = [39, 57, 76, 112, 118, 124, 139, 162, 212, 234, 247, 390, 482, 496, 542, 568, 591, 598, 607, 623, 695, 718, 779, 787, 792]
+    iirange = range(len(test_unit.test_set))
 
     for ii in iirange[:]:
         if args.all:
@@ -229,7 +242,7 @@ for epoch in range(*args.nepochs):
         diffseg1_all = []
         for alpha in np.linspace(*args.nalpha)[:]:
             outputs = list(map(lambda v: test_unit.get_one_output(v, alpha), args.irange))
-            [imgX, imgY, imgXY, imgXY1] = list(zip(*outputs))
+            [imgX, imgY, imgXY, imgXY1, names] = list(zip(*outputs))
 
             imgX = torch.cat(imgX, 0)
             imgY = torch.cat(imgY, 0)
@@ -251,121 +264,91 @@ for epoch in range(*args.nepochs):
             diff1seg0 = seperate_by_seg(x0=diff_XY1, seg=imgXY1seg, masked=[0, 2, 4], absolute=tag, threshold=0, rgb=tag)
             diff1seg1 = seperate_by_seg(x0=diff_XY1, seg=imgXY1seg, masked=[1, 3], absolute=tag, threshold=0, rgb=tag)
 
-            to_show = [imgX,
-                       imgXY,
-                       #imgXY1,
-                       #diff,
-                       diffseg0,
-                       diffseg1,
-                       #diff1seg0,
-                       #diff1seg1
-                       ]
-
-            seg1 = ((imgXYseg == 1) / 1 + (imgXYseg == 3) / 1).unsqueeze(1)
-
-            diffseg1 = SOBEL(seg1).repeat(1, 3, 1, 1).abs()
+            #seg1 = ((imgXYseg == 1) / 1 + (imgXYseg == 3) / 1).unsqueeze(1)
 
             # monte carlo
-            diffseg0_all.append(diffseg0)
-            diffseg1_all.append(diffseg1)
+            diffseg0_all.append(diffseg0.unsqueeze(4))
+            diffseg1_all.append(diffseg1.unsqueeze(4))
 
         # mponte carlo end
-        diffseg0_all = torch.cat(diffseg0_all, 0)
-        diffseg1_all = torch.cat(diffseg1_all, 0)
+        diffseg0_all = torch.cat(diffseg0_all, 4)
+        diffseg1_all = torch.cat(diffseg1_all, 4)
 
-        diffseg0_mean = diffseg0_all[:, 0, :, :].mean(0)
-        diffseg0_std = diffseg0_all[:, 0, :, :].std(0)
+        diffseg0_mean = diffseg0_all.mean(4)[:, 0, :, :]
+        diffseg0_std = diffseg0_all.std(4)[:, 0, :, :]
         diffseg0_unc = torch.div(diffseg0_mean, diffseg0_std+0.0001)
 
-        diffseg1_mean = diffseg1_all[:, 0, :, :].mean(0)
-        diffseg1_std = diffseg1_all[:, 0, :, :].std(0)
+        diffseg1_mean = diffseg1_all.mean(4)[:, 0, :, :]
+        diffseg1_std = diffseg1_all.std(4)[:, 0, :, :]
         diffseg1_unc = torch.div(diffseg1_mean, diffseg1_std+0.0001)
-
-        #diffseg0_unc[torch.isinf(diffseg0_unc)] = 0
-        #diffseg1_unc[torch.isinf(diffseg1_unc)] = 0
 
         diffseg0_unc[diffseg0_mean == 0] = 0
         diffseg1_unc[diffseg1_mean == 0] = 0
 
-        u0 = diffseg0_mean
-        u1 = diffseg1_mean
+        d0 = diffseg0_mean
+        d1 = diffseg1_mean
 
-        d0 = diffseg0_unc#.numpy()
-        d1 = diffseg1_unc#.numpy()
+        u0 = diffseg0_unc
+        u1 = diffseg1_unc
 
-        if 0:
-            m = 0.7
-            u0[0, 0] = m
-            u1[0, 0] = m
+        if 1:
+            m = 20
+            u0[:, 0, 0] = m
+            u1[:, 0, 0] = m
             u0[u0 >= m] = m
             u1[u1 >= m] = m
 
-        m = 40
-        d0[0, 0] = m
-        d1[0, 0] = m
-        d0[d0 >= m] = m
-        d1[d1 >= m] = m
-
-        if 0:
-            d0[d0<=0] = 0.0001
-            d1[d1<=0] = 0.0001
-            d0 = torch.log10(d0)
-            d1 = torch.log10(d1)
-            d0 = d0 - d0.min()
-            d1 = d1 - d1.min()
-            print(d0.max())
-            print(d1.max())
+        if 1:
+            m = 1
+            d0[:, 0, 0] = m
+            d1[:, 0, 0] = m
+            d0[d0 >= m] = m
+            d1[d1 >= m] = m
 
         imgXY[imgXY < 0] = 0
 
         to_show = [imgX,
                    imgXY,
-                   torch.cat([u0.unsqueeze(0).unsqueeze(0)] * 3, 1),
-                   torch.cat([u1.unsqueeze(0).unsqueeze(0)] * 3, 1),
                    torch.cat([d0.unsqueeze(0).unsqueeze(0)] * 3, 1),
                    torch.cat([d1.unsqueeze(0).unsqueeze(0)] * 3, 1),
+                   torch.cat([u0.unsqueeze(0).unsqueeze(0)] * 3, 1),
+                   torch.cat([u1.unsqueeze(0).unsqueeze(0)] * 3, 1),
                    # diff1seg0,
                    # diff1seg1
                    ]
 
-        #tiff.imsave('temp/seg0/' + str(ii).zfill(4) + '.tif', d0)
-        #tiff.imsave('temp/seg1/' + str(ii).zfill(4) + '.tif', d1)
+        def get_significant(x0, y0, xt, yt):
+            x = 1 * x0
+            x[x >= xt] = xt
+            y = 1 * y0
+            y = (y >= yt) / 1
+            z = np.multiply(x, y)
+            z = z / z.max()
+            # z = cm(z)
+            return z
 
-        if 0:
-            destination = os.environ.get('LOGS') + '/segA0/'
-            os.makedirs(destination, exist_ok=True)
-            temp = torch.cat([diffseg0[x, 0, :, :] for x in range(diffseg0.shape[0])], 1)
-            tiff.imsave(destination + str(alpha).zfill(4) + '.tif', temp.numpy().astype(np.float16))
-            destination = os.environ.get('LOGS') + '/segA1/'
-            os.makedirs(destination, exist_ok=True)
-            temp = torch.cat([diffseg1[x, 0, :, :] for x in range(diffseg1.shape[0])], 1)
-            tiff.imsave(destination + str(alpha).zfill(4) + '.tif', temp.numpy().astype(np.float16))
+        to_print = get_significant(x0=d0.numpy(), y0=u0.numpy(), xt=0.2, yt=0.2).astype(np.float32)
+        destination = '/media/ExtHDD01/Dataset/paired_images/womac3/full/abml/'
+        os.makedirs(destination, exist_ok=True)
+        print(to_print.shape)
+        if args.bysubject:
+            for b in range(to_print.shape[0]):
+                tiff.imsave(destination + names[0][b].split('/')[-1], to_print[b, ::])
+        else:
+            tiff.imsave(destination + names[0][0].split('/')[-1], to_print)
 
-        if 1:
-            to_print(to_show, save_name=os.path.join("outputs/results/", args.dataset, args.prj,
-                                                     str(epoch) + '_' + str(alpha) + '_' + str(ii).zfill(4) + '.jpg'))
-
-        if 0:#args.all:
-            result = diffseg0
-            destination = 'outputs/results/seg0b/'
-            os.makedirs(destination, exist_ok=True)
-            if tag:
-                to_save = result[0, ::].permute(1, 2, 0).numpy().astype(np.float16)
-            else:
-                to_save = result[0, 0, ::].numpy().astype(np.float32)
-            tiff.imsave(os.path.join(destination,  names[0][0].split('/')[-1]), to_save)
-
-            result = diffseg1
-            destination = 'outputs/results/seg1b/'
-            os.makedirs(destination, exist_ok=True)
-            if tag:
-                to_save = result[0, ::].permute(1, 2, 0).numpy().astype(np.float16)
-            else:
-                to_save = result[0, 0, ::].numpy().astype(np.float32)
-            tiff.imsave(os.path.join(destination,  names[0][0].split('/')[-1]), to_save)
+        to_print = get_significant(x0=d1.numpy(), y0=u1.numpy(), xt=0.9, yt=0.5).astype(np.float32)
+        destination = '/media/ExtHDD01/Dataset/paired_images/womac3/full/aeff/'
+        os.makedirs(destination, exist_ok=True)
+        print(to_print.shape)
+        if args.bysubject:
+            for b in range(to_print.shape[0]):
+                tiff.imsave(destination + names[0][b].split('/')[-1], to_print[b, ::])
+        else:
+            tiff.imsave(destination + names[0][0].split('/')[-1], to_print)
 
 
-
+# CUDAVISIBLE_DEVICES=1 python test2seg.py --jsn womac3 --direction a_b --prj mcfix/descar2/Gdescarsmc_index2 --cropsize 384 --n01 --nalpha 0 20 21 --all --nepochs 200 --gray --testset womac3/full/
 
 # USAGE
 # CUDA_VISIBLE_DEVICES=0 python test.py --jsn default --dataset pain --nalpha 0 100 2  --prj VryAtt
@@ -374,4 +357,6 @@ for epoch in range(*args.nepochs):
 # python testrefactor.py --jsn womac3 --direction b_a --prj N01/DescarMul/ --cropsize 384 --n01 --cmb mul --nepoch 20
 
 
-# CUDAVISIBLE_DEVICES=1 python test2.py --jsn womac3 --direction a_b --prj bysubjectright/mc/descar2/Gunet128 --cropsize 384 --n01 --nalpha 0 100 101 --all --nepochs 80
+# CUDA_VISIBLE_DEVICES=1 python test2.py --jsn womac3 --direction a_b --prj bysubjectright/mc/descar2/Gunet128 --cropsize 384 --n01 --nalpha 0 100 101 --all --nepochs 80
+
+# CUDA_VISIBLE_DEVICES=1 python test2seg.py --jsn womac3 --direction a_b --prj mcfix/descar2/Gdescarsmc_index2 --cropsize 384 --n01 --nalpha 0 100 101 --all --nepochs 100 --gray --testset womac3/full/
