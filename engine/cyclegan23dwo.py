@@ -43,14 +43,14 @@ class GAN(BaseModel):
         self.netg_names = {'net_gXY': 'netGXY', 'net_gYX': 'netGYX'}
         self.netd_names = {'net_dXw': 'netDXw', 'net_dYw': 'netDYw', 'net_dXo': 'netDXo', 'net_dYo': 'netDYo'}
 
-        self.w2sb = torch.load('/media/ExtHDD01/logs/Fly3D/wpopsb/Gunet128Crop/checkpoints/netG_model_epoch_90.pth').cuda()
+        self.w2sb = torch.load('submodels/w2sb.pth').cuda()#torch.load('/media/ExtHDD01/logs/Fly3D/wpopsb/Gunet128Crop/checkpoints/netG_model_epoch_90.pth').cuda()
 
     @staticmethod
     def add_model_specific_args(parent_parser):
         parser = parent_parser.add_argument_group("LitModel")
         # coefficient for the identify loss
-        parser.add_argument("--lambI", type=int, default=0.5)
-        parser.add_argument("--lambZ", type=int, default=0.5)
+        parser.add_argument("--lambI", type=float, default=0.5)
+        parser.add_argument("--lambZ", type=float, default=0)
         return parent_parser
 
     def test_method(self, net_g, x):
@@ -210,3 +210,6 @@ class GAN(BaseModel):
 
 # CUDA_VISIBLE_DEVICES=0 python train.py --jsn wnwp3d --prj wnwp3d/cyc23dwo/0sb --engine cyclegan23dwo --input_nc 2 --output_nc 1
 
+# CUDA_VISIBLE_DEVICES=0 python train.py --jsn wnwp3d --prj wnwp3d/cyc3/GdenuWSmcZ1 --mc --engine cyclegan23dwo --netG descarnoumc --lambZ 0
+
+# CUDA_VISIBLE_DEVICES=0 python train.py --jsn wnwp3d --prj wnwp3d/cyc3/GdenuWBmcZ1 --mc --engine cyclegan23dwo -b 16 --netG descarnoumc --lambZ 0 --direction zyweak_zysb%xyweak_xysb

@@ -22,7 +22,7 @@
     "n01": false,
     "final": "tanh",
     "cmb": false,
-    "batch_size": 1,
+    "batch_size": 16,
     "test_batch_size": 1,
     "n_epochs": 201,
     "lr": 0.0002,

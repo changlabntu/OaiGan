@@ -2,13 +2,14 @@ from __future__ import print_function
 import argparse
 import torch.nn as nn
 from torch.utils.data import DataLoader
+
 import os, shutil, copy
 from dotenv import load_dotenv
+
 from utils.make_config import *
 import pytorch_lightning as pl
 from pytorch_lightning import loggers as pl_loggers
 import pandas as pd
-
 
 def prepare_log(args):
     """
@@ -86,15 +87,13 @@ with open('engine/jsn/' + parser.parse_args().jsn + '.json', 'rt') as f:
 
 # environment file
 if args.env is not None:
-    load_dotenv('.' + args.env)
+    load_dotenv('env/.' + args.env)
 else:
-    load_dotenv('.env')
+    load_dotenv('env/.t09')
+print(os.environ.get('LOGS'))
 
 # Finalize Arguments and create files for logging
 args = prepare_log(args)
-#if args.gray:`
-#    args.input_nc = 1
-#    args.output_nc = 1
 
 #  Define Dataset Class
 from dataloader.data_multi import MultiData as Dataset
@@ -120,7 +119,6 @@ train_loader = DataLoader(dataset=train_set, num_workers=args.threads, batch_siz
 #                  path=args.direction,
 #                  opt=args, mode='test')
 #val_loader = DataLoader(dataset=val_set, num_workers=args.threads, batch_size=args.batch_size, shuffle=False)
-print(len(train_set))
 
 # Trainer
 logger = pl_loggers.TensorBoardLogger(os.environ.get('LOGS') + args.dataset + '/', name=args.prj)

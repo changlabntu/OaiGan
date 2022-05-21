@@ -44,11 +44,6 @@ class Pix2PixModel:
                                 path=args.direction,
                                 opt=args, mode='test', filenames=True)
 
-        self.magic = torch.load('/media/ExtHDD01/logs/Fly3D/wpopsb/Gunet128Crop/checkpoints/netG_model_epoch_200.pth').cuda()
-        #self.magic256 = torch.load('/media/ExtHDD01/checkpoints/FlyZ_WpOp/netG_model_epoch_170.pth').cuda()
-        #self.magic286 = torch.load('/media/ExtHDD01/checkpoints/FlyZ_WpOp/netG_model_epoch_170.pth').cuda()
-        #self.magic286 = torch.load('/media/ExtHDD01/checkpointsold/FlyZ_WpOp286Mask/netG_model_epoch_10.pth').cuda()
-
         self.device = torch.device("cuda:0")
 
     def get_model(self,  epoch, eval=False):
@@ -67,6 +62,7 @@ class Pix2PixModel:
         alpha = alpha / 100
         # inputs
         x, name = self.test_set.__getitem__(i)
+        print(x[0].shape)
 
         for b in range(len(x)):
             x[b] = x[b].to(self.device)
@@ -77,26 +73,20 @@ class Pix2PixModel:
         test_method = getattr(__import__('engine.' + engine), engine).GAN.test_method
 
         output = []
-        for s in range(0, x[0].shape[0], 10):
-            output.append(test_method(self, self.net_g, [y[s : s+10, :, :, :] for y in x]).detach().cpu())
+        batch = 16
+        for s in range(0, x[0].shape[0], batch):
+            output.append(test_method(self, self.net_g, [y[s : s+batch, :, :, :] for y in x]).detach().cpu())
         output = torch.cat(output, 0)
 
-        if args.cmb is not False:
-            output = combine(output, x[0], args.cmb)
-            if args.cmb == 'mul':
-                output[output<0] = 0
-
-        #magic, = self.magic(output)
-        #tiff.imsave('outputs/' + str(i)+'original.tif', x[0][:, 0, :, :].detach().cpu().numpy())
+        x[0] = x[0].detach().cpu()
+        x[1] = x[1].detach().cpu()
+        output = output.detach().cpu()
 
         if self.args.gray:
             x[0] = x[0].repeat(1, 3, 1, 1)
             x[1] = x[1].repeat(1, 3, 1, 1)
             output = output.repeat(1, 3, 1, 1)
 
-        x[0] = x[0].detach().cpu()
-        x[1] = x[1].detach().cpu()
-        output = output.detach().cpu()
         return x[0], x[1], output, name
 
 
@@ -136,7 +126,7 @@ with open('outputs/jsn/' + parser.parse_args().jsn + '.json', 'rt') as f:
 if args.env is not None:
     load_dotenv('.' + args.env)
 else:
-    load_dotenv('.env')
+    load_dotenv('.309')
 
 if len(args.nepochs) == 1:
     args.nepochs = [args.nepochs[0], args.nepochs[0]+1, 1]
@@ -168,12 +158,12 @@ for epoch in range(*args.nepochs):
         output = torch.cat([x.unsqueeze(4) for x in out_all], 4)
         output_mean = output.mean(4)
         output_var = output.var(4)
-        output_sig = torch.div(output.mean(4), output.var(4)+0.00001)
+        #output_sig = torch.div(output.mean(4), output.var(4)+0.00001)
 
         os.makedirs('outputs/' + args.prj + '/', exist_ok=True)
         tiff.imsave('outputs/' + args.prj + '/' + str(epoch) + '_' + str(args.nalpha[2]) + '.tif', output_mean[:, 0, :, :].detach().cpu().numpy())
         tiff.imsave('outputs/' + args.prj + '/' + str(epoch) + '_' + str(args.nalpha[2]) + 'v.tif', output_var[:, 0, :, :].detach().cpu().numpy())
-        tiff.imsave('outputs/' + args.prj + '/' + str(epoch) + '_' + str(args.nalpha[2]) + 's.tif', output_sig[:, 0, :, :].detach().cpu().numpy())
+        #tiff.imsave('outputs/' + args.prj + '/' + str(epoch) + '_' + str(args.nalpha[2]) + 's.tif', output_sig[:, 0, :, :].detach().cpu().numpy())
 
 # USAGE
 # CUDA_VISIBLE_DEVICES=0 python test.py --jsn default --dataset pain --nalpha 0 100 2  --prj VryAtt
@@ -181,5 +171,6 @@ for epoch in range(*args.nepochs):
 # python testoai.py --jsn womac3 --direction a_b --prj N01/DescarMul/ --cropsize 384 --n01 --cmb mul
 # python testrefactor.py --jsn womac3 --direction b_a --prj N01/DescarMul/ --cropsize 384 --n01 --cmb mul --nepoch 20
 
+# CUDA_VISIBLE_DEVICES=1 python test_fly3D.py --env a6k --jsn FlyZWpWn --direction zyweak512_zyorisb512 --prj wnwp3d/cyc3/GdenuWSmcYL10 --engine cyclegan23dwo --nalpha 0 20 20 --nepochs 0 201 20
 
 # CUDA_VISIBLE_DEVICES=1 python test_fly3D.py --jsn FlyZWpWn --direction zyweak512_zyori512 --prj wnwp3d/cyc2l1/0 --nepochs 60 --engine cyclegan23d --cropsize 512

@@ -160,7 +160,7 @@ class PairedData(data.Dataset):
 
         if transforms is None:
             additional_targets = dict()
-            for i in range(1, 1000):#len(self.all_path)):
+            for i in range(1, 9999):#len(self.all_path)):
                 additional_targets[str(i).zfill(4)] = 'image'
             self.transforms = get_transforms(crop_size=self.cropsize,
                                              resize=self.resize,
@@ -314,7 +314,7 @@ class PairedDataTif(data.Dataset):
 
         if transforms is None:
             additional_targets = dict()
-            for i in range(1, 1000):#len(self.all_path)):
+            for i in range(1, 9999):#len(self.all_path)):
                 additional_targets[str(i).zfill(4)] = 'image'
             self.transforms = get_transforms(crop_size=opt.cropsize,
                                              resize=opt.resize,
