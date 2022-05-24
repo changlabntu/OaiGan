@@ -41,13 +41,13 @@ class GAN(BaseModel):
     def backward_g(self, inputs):
         # ADV(X0)+
         loss_g = 0
-        loss_g += self.add_loss_adv(a=self.imgX0, net_d=self.net_d, coeff=1, truth=True, stacked=False)
+        loss_g = self.add_loss_adv(a=self.imgX0, net_d=self.net_d, loss=loss_g, coeff=1, truth=True, stacked=False)
 
         # L1(X0, Y)
-        loss_g += self.add_loss_L1(a=self.imgX0, b=self.oriY, coeff=self.hparams.lamb)
+        loss_g = self.add_loss_L1(a=self.imgX0, b=self.oriY, loss=loss_g, coeff=self.hparams.lamb)
 
         # L1(X1, X)
-        loss_g += self.add_loss_L1(a=self.imgX1, b=self.oriX, coeff=self.hparams.lb1)
+        loss_g = self.add_loss_L1(a=self.imgX1, b=self.oriX, loss=loss_g, coeff=self.hparams.lb1)
 
         # ADV(X1)+
         #loss_g = self.add_loss_adv(a=self.imgX1, net_d=self.net_dY, loss=loss_g, coeff=1, truth=True, stacked=False)
@@ -60,10 +60,10 @@ class GAN(BaseModel):
     def backward_d(self, inputs):
         loss_d = 0
         # ADV(X0)-
-        loss_d += self.add_loss_adv(a=self.imgX0, net_d=self.net_d, coeff=0.5, truth=False, stacked=False)
+        loss_d = self.add_loss_adv(a=self.imgX0, net_d=self.net_d, loss=loss_d, coeff=0.5, truth=False, stacked=False)
 
         # ADV(Y)+
-        loss_d += self.add_loss_adv(a=self.oriY, net_d=self.net_d, coeff=0.5, truth=True)
+        loss_d = self.add_loss_adv(a=self.oriY, net_d=self.net_d, loss=loss_d, coeff=0.5, truth=True)
 
         # ADV(X1)-
         #loss_d = self.add_loss_adv(a=self.imgX1, net_d=self.net_dY, loss=loss_d, coeff=0.5, truth=False, stacked=False)
@@ -73,4 +73,4 @@ class GAN(BaseModel):
 
         return {'sum': loss_d, 'loss_d': loss_d}
 
-# CUDA_VISIBLE_DEVICES=1 python train.py --jsn womac3 --prj mcfix/descar2/Gdescarsmc_index2_check --engine descar2 --netG descarsmc --mc --direction areg_b --index --gray
+# CUDA_VISIBLE_DEVICES=2 python train.py --jsn womac3 --prj mcfix/descar2/GdescarsmcC --lamb 0 --lb1 100 --env a6k  --engine descar2 --netG descarsmc --mc --direction areg_b --index --gray

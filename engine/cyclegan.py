@@ -50,36 +50,36 @@ class GAN(BaseModel):
     def backward_g(self, inputs):
         loss_g = 0
         # ADV(XY)+
-        loss_g = self.add_loss_adv(a=self.imgXY, b=None, net_d=self.net_dY, loss=loss_g, coeff=1, truth=True, stacked=False)
+        loss_g += self.add_loss_adv(a=self.imgXY, b=None, net_d=self.net_dY, coeff=1, truth=True, stacked=False)
         # ADV(YX)+
-        loss_g = self.add_loss_adv(a=self.imgYX, b=None, net_d=self.net_dX, loss=loss_g, coeff=1, truth=True, stacked=False)
+        loss_g += self.add_loss_adv(a=self.imgYX, b=None, net_d=self.net_dX, coeff=1, truth=True, stacked=False)
 
         # Cyclic(XYX, X)
-        loss_g = self.add_loss_L1(a=self.imgXYX, b=self.oriX, loss=loss_g, coeff=self.hparams.lamb)
+        loss_g += self.add_loss_L1(a=self.imgXYX, b=self.oriX, coeff=self.hparams.lamb)
         # Cyclic(YXY, Y)
-        loss_g = self.add_loss_L1(a=self.imgYXY, b=self.oriY, loss=loss_g, coeff=self.hparams.lamb)
+        loss_g += self.add_loss_L1(a=self.imgYXY, b=self.oriY, coeff=self.hparams.lamb)
 
         # Identity(idt_X, X)
         if self.hparams.lambI > 0:
-            loss_g = self.add_loss_L1(a=self.idt_X, b=self.oriX, loss=loss_g, coeff=self.hparams.lambI)
+            loss_g += self.add_loss_L1(a=self.idt_X, b=self.oriX, coeff=self.hparams.lambI)
             # Identity(idt_Y, Y)
-            loss_g = self.add_loss_L1(a=self.idt_Y, b=self.oriY, loss=loss_g, coeff=self.hparams.lambI)
+            loss_g += self.add_loss_L1(a=self.idt_Y, b=self.oriY, coeff=self.hparams.lambI)
 
         return {'sum': loss_g, 'loss_g': loss_g}
 
     def backward_d(self, inputs):
         loss_d = 0
         # ADV(XY)-
-        loss_d = self.add_loss_adv(a=self.imgXY, net_d=self.net_dY, loss=loss_d, coeff=1, truth=False, stacked=False)
+        loss_d += self.add_loss_adv(a=self.imgXY, net_d=self.net_dY, coeff=1, truth=False, stacked=False)
 
         # ADV(YX)-
-        loss_d = self.add_loss_adv(a=self.imgYX, net_d=self.net_dX, loss=loss_d, coeff=1, truth=False, stacked=False)
+        loss_d += self.add_loss_adv(a=self.imgYX, net_d=self.net_dX, coeff=1, truth=False, stacked=False)
 
         # ADV(Y)+
-        loss_d = self.add_loss_adv(a=self.oriY, net_d=self.net_dY, loss=loss_d, coeff=1, truth=True, stacked=False)
+        loss_d += self.add_loss_adv(a=self.oriY, net_d=self.net_dY, coeff=1, truth=True, stacked=False)
 
         # ADV(X)+
-        loss_d = self.add_loss_adv(a=self.oriX, net_d=self.net_dX, loss=loss_d, coeff=1, truth=True, stacked=False)
+        loss_d += self.add_loss_adv(a=self.oriX, net_d=self.net_dX, coeff=1, truth=True, stacked=False)
 
         return {'sum': loss_d, 'loss_d': loss_d}
 

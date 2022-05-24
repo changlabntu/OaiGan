@@ -161,7 +161,7 @@ class BaseModel(pl.LightningModule):
         self.optimizer_d = optim.Adam(netd_parameters, lr=self.hparams.lr, betas=(self.hparams.beta1, 0.999))
         return [self.optimizer_d, self.optimizer_g], []
 
-    def add_loss_adv(self, a, net_d, coeff, truth, b=None, log=None, stacked=False):
+    def add_loss_adv(self, a, net_d, loss, coeff, truth, b=None, log=None, stacked=False):
         if stacked:
             fake_in = torch.cat((a, b), 1)
         else:
@@ -171,15 +171,17 @@ class BaseModel(pl.LightningModule):
             adv = self.criterionGAN(disc_logits, torch.ones_like(disc_logits))
         else:
             adv = self.criterionGAN(disc_logits, torch.zeros_like(disc_logits))
+        loss = loss + coeff * adv
         if log is not None:
-            self.log(log, adv, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        return coeff * adv
+            self.log(log, coeff * adv, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        return loss
 
-    def add_loss_L1(self, a, b, coeff, log=None):
+    def add_loss_L1(self, a, b, loss, coeff, log=None):
         l1 = self.criterionL1(a, b)
+        loss = loss + coeff * l1
         if log is not None:
-            self.log(log, l1, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
-        return coeff * l1
+            self.log(log, coeff * l1, on_step=False, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        return loss
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         self.batch_idx = batch_idx

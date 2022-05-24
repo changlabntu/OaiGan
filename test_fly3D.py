@@ -124,9 +124,9 @@ with open('outputs/jsn/' + parser.parse_args().jsn + '.json', 'rt') as f:
 
 # environment file
 if args.env is not None:
-    load_dotenv('.' + args.env)
+    load_dotenv('env/.' + args.env)
 else:
-    load_dotenv('.309')
+    load_dotenv('env/.t09')
 
 if len(args.nepochs) == 1:
     args.nepochs = [args.nepochs[0], args.nepochs[0]+1, 1]

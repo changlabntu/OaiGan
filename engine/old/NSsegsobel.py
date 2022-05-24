@@ -24,6 +24,7 @@ class GAN(BaseModel):
              [1, 2, 1]
              ]]).reshape(2, 1, 3, 3)
         SOBEL.weight.set_(ww).cuda()
+
         self.SOBEL = SOBEL
 
     @staticmethod

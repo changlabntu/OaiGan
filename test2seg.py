@@ -179,16 +179,16 @@ parser.add_argument('--nalpha', default=(0, 100, 1), nargs='+', help='range of a
 parser.add_argument('--mode', type=str, default='dummy')
 parser.add_argument('--port', type=str, default='dummy')
 
-with open('outputs/' + parser.parse_args().jsn + '.json', 'rt') as f:
+with open('outputs/jsn/' + parser.parse_args().jsn + '.json', 'rt') as f:
     t_args = argparse.Namespace()
     t_args.__dict__.update(json.load(f))
     args = parser.parse_args(namespace=t_args)
 
 # environment file
 if args.env is not None:
-    load_dotenv('.' + args.env)
+    load_dotenv('env/.' + args.env)
 else:
-    load_dotenv('.env')
+    load_dotenv('env/.t09')
 
 if len(args.nepochs) == 1:
     args.nepochs = [args.nepochs[0], args.nepochs[0]+1, 1]
@@ -234,7 +234,7 @@ for epoch in range(*args.nepochs):
 
     iirange = range(len(test_unit.test_set))
 
-    for ii in iirange[:]:
+    for ii in iirange[:1000]:
         if args.all:
             args.irange = [ii]
 
@@ -317,7 +317,7 @@ for epoch in range(*args.nepochs):
                    # diff1seg1
                    ]
 
-        def get_significant(x0, y0, xt, yt):
+        def get_significance(x0, y0, xt, yt):
             x = 1 * x0
             x[x >= xt] = xt
             y = 1 * y0
@@ -327,8 +327,8 @@ for epoch in range(*args.nepochs):
             # z = cm(z)
             return z
 
-        to_print = get_significant(x0=d0.numpy(), y0=u0.numpy(), xt=0.2, yt=0.2).astype(np.float32)
-        destination = '/media/ExtHDD01/Dataset/paired_images/womac3/full/abml/'
+        to_print = get_significance(x0=d0.numpy(), y0=u0.numpy(), xt=0.2, yt=0.2).astype(np.float32)
+        destination = '/media/ExtHDD01/Dataset/paired_images/womac3/full/abml2/'
         os.makedirs(destination, exist_ok=True)
         print(to_print.shape)
         if args.bysubject:
@@ -337,8 +337,8 @@ for epoch in range(*args.nepochs):
         else:
             tiff.imsave(destination + names[0][0].split('/')[-1], to_print)
 
-        to_print = get_significant(x0=d1.numpy(), y0=u1.numpy(), xt=0.9, yt=0.5).astype(np.float32)
-        destination = '/media/ExtHDD01/Dataset/paired_images/womac3/full/aeff/'
+        to_print = get_significance(x0=d1.numpy(), y0=u1.numpy(), xt=0.9, yt=0.5).astype(np.float32)
+        destination = '/media/ExtHDD01/Dataset/paired_images/womac3/full/aeff2/'
         os.makedirs(destination, exist_ok=True)
         print(to_print.shape)
         if args.bysubject:
